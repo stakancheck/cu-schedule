@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Свободные аудитории ЦУ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app">
+    <!-- ЛЕВАЯ ЧАСТЬ: план -->
+    <section class="plan-pane">
+      <header class="plan-bar">
+        <div class="seg" id="campusSeg" role="tablist" aria-label="Кампус">
+          <button class="on" data-campus="CT">ЦТ</button>
+          <button data-campus="DUCAT">Дукат</button>
+        </div>
+        <div class="seg" id="floorSeg" role="tablist" aria-label="Этаж"></div>
+        <div class="spacer"></div>
+        <div class="tools">
+          <button class="icon-btn" id="rotL" title="Повернуть против часовой">
+            <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v5h5"/></svg>
+          </button>
+          <button class="compass" id="compass" title="Север наверх">
+            <svg viewBox="-20 -20 40 40"><g id="needle"><path class="n" d="M0,-15 L5,0 L-5,0Z"/><path class="s" d="M0,15 L5,0 L-5,0Z"/></g><text id="compassN" y="-4.5" x="0">С</text></svg>
+          </button>
+          <button class="icon-btn" id="rotR" title="Повернуть по часовой">
+            <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5"/></svg>
+          </button>
+          <span class="sep"></span>
+          <button class="icon-btn" id="zoomOut" title="Отдалить"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
+          <button class="icon-btn" id="zoomIn" title="Приблизить"><svg viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"/></svg></button>
+        </div>
+        <div class="floor-title">
+          <div class="floor-n" id="floorN">Этаж 3</div>
+          <div class="floor-sum" id="floorSum"></div>
+        </div>
+      </header>
+      <div class="plan-wrap" id="planWrap">
+        <svg id="plan" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="legend">
+          <span><i class="sw free"></i>Свободна</span>
+          <span><i class="sw soon"></i>Скоро пара</span>
+          <span><i class="sw busy"></i>Идёт пара</span>
+          <span><i class="sw kitchen"></i>Кухни, кафе</span>
+          <span><i class="sw staff"></i>Сотрудники</span>
+        </div>
+        <div class="tooltip" id="tooltip" hidden></div>
+      </div>
+    </section>
+
+    <!-- ПРАВАЯ ЧАСТЬ: дата, время, расписание -->
+    <aside class="side">
+      <div class="side-head">
+        <div class="date-row">
+          <button class="icon-btn" id="prevDay" title="Предыдущий день"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <label class="date-main" title="Выбрать дату">
+            <span class="dow" id="dow"></span>
+            <span class="dnum" id="dnum"></span>
+            <input type="date" id="datePick">
+          </label>
+          <button class="icon-btn" id="nextDay" title="Следующий день"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+        </div>
+        <div class="quick-days" id="quickDays"></div>
+
+        <div class="time-row">
+          <span class="time-lbl">План на</span>
+          <span class="time-val" id="timeVal">--:--</span>
+          <input type="range" id="timeRange" min="480" max="1320" step="5">
+          <button class="chip-btn" id="nowBtn">Сейчас</button>
+        </div>
+      </div>
+
+      <div class="side-body" id="sideBody">
+        <div id="roomCard"></div>
+        <div id="freeBlock"></div>
+
+        <div class="list-head">
+          <h2 id="listTitle">Пары</h2>
+          <div class="seg small" id="scopeSeg">
+            <button data-scope="all" class="on">Весь кампус</button>
+            <button data-scope="floor">Этот этаж</button>
+          </div>
+        </div>
+        <input class="search" id="search" type="search" placeholder="Поиск: предмет, преподаватель, поток">
+        <ol class="events" id="events"></ol>
+      </div>
+    </aside>
+  </div>
+
+  <script src="data/schedule.js"></script>
+  <script src="js/plans.js"></script>
+  <script src="js/plans-ducat.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
