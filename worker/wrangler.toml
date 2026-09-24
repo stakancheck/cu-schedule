@@ -1,0 +1,11 @@
+name = "cu-schedule-api"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+# С каких сайтов можно обращаться к API (localhost разрешён всегда)
+ALLOWED_ORIGINS = "https://stakancheck.github.io"
+
+# Секрет задаётся отдельно и в репозиторий не попадает:
+#   npx wrangler@4 secret put SESSION_KEY
+# значение: 32 случайных байта в base64, например `openssl rand -base64 32`

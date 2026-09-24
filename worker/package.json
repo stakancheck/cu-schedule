@@ -1,0 +1,10 @@
+{
+  "name": "cu-schedule-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node dev.mjs",
+    "test": "node --test test/*.test.mjs",
+    "deploy": "npx wrangler@4 deploy"
+  }
+}

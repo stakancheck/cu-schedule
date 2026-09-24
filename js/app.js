@@ -155,6 +155,33 @@
     return out;
   }
 
+  /* ============================================================ Мои пары (Яндекс Календарь) */
+  const A = window.CUAccount;
+  const norm = (s) => (s || "").toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ").trim();
+
+  // Преподавателей и поток в календаре нет: берём из общей базы по дате, времени и предмету
+  const extras = new Map();
+  function enrich(ev) {
+    const key = `${ev.date}|${ev.startHM}|${ev.title}|${ev.rooms.join()}`;
+    if (!extras.has(key)) {
+      const cands = (byDate.get(ev.date) || []).filter((c) => c.start === ev.startHM && norm(c.title) === norm(ev.title));
+      const hit = cands.find((c) => c.rooms.some((r) => ev.rooms.includes(r))) || (cands.length === 1 ? cands[0] : null);
+      extras.set(key, { teachers: hit ? hit.teachers : "", stream: hit ? hit.stream : "", known: ev.rooms.filter((r) => roomFloor[r]) });
+    }
+    // статус отметки меняется, поэтому берём его из свежего события, а не из кэша
+    return { ...ev, ...extras.get(key) };
+  }
+  const myEvents = (date) => (A.user ? A.eventsOn(date).map(enrich) : []);
+
+  function myRooms(date) {
+    const out = new Map(); // аудитория -> пары в ней
+    for (const ev of myEvents(date)) {
+      if (ev.partstat === "DECLINED") continue;
+      for (const r of ev.known) (out.get(r) || out.set(r, []).get(r)).push(ev);
+    }
+    return out;
+  }
+
   /* ============================================================ Даты */
   const pad = (n) => String(n).padStart(2, "0");
   const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -180,7 +207,12 @@
     query: "",
     showPast: false,
     view: "plan",   // вкладка мобильной версии: plan | list | info
+    mine: false,    // список: мои пары или все
   };
+  try {
+    const m = localStorage.getItem("cu.mode");
+    state.mine = A.enabled && (m ? m === "mine" : !!A.user);
+  } catch (e) { state.mine = A.enabled && !!A.user; }
 
   (function readHash() {
     const h = new URLSearchParams(location.hash.slice(1));
@@ -467,6 +499,7 @@
     return p.matrixTransform(svg.getScreenCTM().inverse());
   }
   function zoomAt(factor, clientX, clientY) {
+    focusAnim++; // ручной масштаб отменяет наведение на аудиторию
     const before = clientX != null ? svgPoint(clientX, clientY) : null;
     state.zoom = Math.min(6, Math.max(1, state.zoom * factor));
     if (state.zoom === 1) state.pan = [0, 0];
@@ -478,6 +511,51 @@
       applyTransform();
     }
   }
+  // Плавно приблизить план к аудитории: центр комнаты в центр экрана с учётом поворота.
+  // На телефоне комнату ставим выше центра, чтобы её не закрывала карточка снизу.
+  let focusAnim = 0;
+  function focusRoom(room) {
+    const floor = campus.floors[state.floor];
+    const r = floor && floor.rooms.find((x) => x.id === room);
+    if (!r || !r.pts || !r.pts.length) return;
+    // габариты берём из данных: у скрытого плана (вкладка списка) getBBox вернёт нули
+    const off = floor.floorPaths ? [0, 0] : floor.offset;
+    const xs = r.pts.map((p) => p[0]), ys = r.pts.map((p) => p[1]);
+    const b = { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
+    const x = b.x + b.width / 2 + off[0], y = b.y + b.height / 2 + off[1];
+    const rad = (state.angle * Math.PI) / 180, c = Math.cos(rad), s = Math.sin(rad);
+    const rx = CX + (x - CX) * c - (y - CY) * s, ry = CY + (x - CX) * s + (y - CY) * c;
+
+    // размер вида при zoom = 1 (как в applyTransform)
+    const rp = campus.extent.map(([px, py]) => [CX + (px - CX) * c - (py - CY) * s, CY + (px - CX) * s + (py - CY) * c]);
+    const bw = Math.max(...rp.map((p) => p[0])) - Math.min(...rp.map((p) => p[0]));
+    const bh = Math.max(...rp.map((p) => p[1])) - Math.min(...rp.map((p) => p[1]));
+    // Масштаб от реального размера плана на экране: комната занимает около четверти
+    // меньшей стороны (при preserveAspectRatio=meet в пикселях видно min(W/bw, H/bh) * zoom)
+    const box = svg.getBoundingClientRect();
+    const W = box.width || 800, H = box.height || 600;
+    const fit = Math.min(W / bw, H / bh);
+    const size = Math.max(b.width, b.height, 1);
+    const zoom = Math.min(4.5, Math.max(1.6, (0.25 * Math.min(W, H)) / (size * fit)));
+    // на телефоне поднимаем комнату над мини-карточкой снизу
+    const lift = window.matchMedia("(max-width: 900px)").matches ? (H / (fit * zoom)) * 0.1 : 0;
+    const target = { zoom, pan: [rx - CX, ry - CY + lift] };
+
+    const from = { zoom: state.zoom, pan: [...state.pan] };
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const t0 = performance.now(), dur = reduce ? 0 : 520, id = ++focusAnim;
+    const step = (now) => {
+      if (id !== focusAnim) return; // началась новая анимация
+      const k = dur ? Math.min(1, (now - t0) / dur) : 1;
+      const e = 1 - Math.pow(1 - k, 3);
+      state.zoom = from.zoom + (target.zoom - from.zoom) * e;
+      state.pan = [from.pan[0] + (target.pan[0] - from.pan[0]) * e, from.pan[1] + (target.pan[1] - from.pan[1]) * e];
+      applyTransform();
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
   $("zoomIn").onclick = () => zoomAt(1.4);
   $("zoomOut").onclick = () => zoomAt(1 / 1.4);
   svg.addEventListener("wheel", (e) => { e.preventDefault(); zoomAt(Math.exp(-e.deltaY * 0.0022), e.clientX, e.clientY); }, { passive: false });
@@ -486,6 +564,7 @@
   let drag = null;
   const pointers = new Map();
   svg.addEventListener("pointerdown", (e) => {
+    focusAnim++;
     if (e.pointerType !== "mouse") hideTip();
     pointers.set(e.pointerId, [e.clientX, e.clientY]);
     if (pointers.size === 2) {
@@ -558,17 +637,21 @@
   });
 
   function paintRooms() {
+    const mine = myRooms(state.date);
     for (const [room, poly] of Object.entries(roomEls)) {
       const st = roomStatus(room, state.date, state.t);
       poly.classList.remove("free", "soon", "busy");
       poly.classList.add(st.st);
       poly.classList.toggle("sel", room === state.room);
+      poly.classList.toggle("mine", mine.has(room));
       const lab = roomLabelEls[room];
+      lab.g.classList.toggle("mine", mine.has(room));
       lab.dot.setAttribute("class", "dot dot-" + st.st);
       lab.sub.setAttribute("class", "sub dot-" + st.st);
       lab.sub.textContent = st.st === "busy" ? `до ${fmt(st.until)}` : st.until ? `своб. до ${fmt(st.until)}` : "свободна";
     }
     svg.querySelectorAll(".rooms").forEach((g) => g.classList.toggle("has-sel", !!state.room));
+    document.querySelector(".lg-mine").hidden = !mine.size;
   }
 
   /* ============================================================ Правая колонка */
@@ -578,18 +661,24 @@
     const seg = $("floorSeg");
     seg.innerHTML = "";
     seg.classList.toggle("many", floorNums(campus).length > 4);
+    const mine = [...myRooms(state.date).keys()];
+    const myFloors = new Set(mine.filter((r) => roomCampus[r] === state.campus).map((r) => roomFloor[r]));
     for (const n of floorNums(campus)) {
       const b = document.createElement("button");
       b.innerHTML = `${n}<span class="fl-w"> этаж</span>`;
-      b.title = `${n} этаж`;
-      b.className = +n === state.floor ? "on" : "";
+      b.title = myFloors.has(n) ? `${n} этаж: здесь ваши пары` : `${n} этаж`;
+      b.className = (+n === state.floor ? "on" : "") + (myFloors.has(n) ? " has-mine" : "");
       b.onclick = () => setFloor(+n);
       seg.appendChild(b);
     }
     const f = campus.floors[state.floor];
     $("floorN").textContent = `Этаж ${state.floor}`;
     $("floorSum").textContent = f.summary || autoSummary(f);
-    $("campusSeg").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.campus === state.campus));
+    const myCampuses = new Set(mine.map((r) => roomCampus[r]));
+    $("campusSeg").querySelectorAll("button").forEach((b) => {
+      b.classList.toggle("on", b.dataset.campus === state.campus);
+      b.classList.toggle("has-mine", myCampuses.has(b.dataset.campus));
+    });
   }
 
   function autoSummary(f) {
@@ -629,8 +718,12 @@
     if (!state.room) { peek.innerHTML = ""; return; }
     const st = roomStatus(state.room, state.date, state.t);
     const text = st.st === "busy" ? `Занята до ${fmt(st.until)}` : st.until ? `Свободна до ${fmt(st.until)}` : "Свободна до конца дня";
+    // своя пара в этой аудитории: ближайшая не закончившаяся, иначе последняя
+    const mineHere = myRooms(state.date).get(state.room) || [];
+    const my = mineHere.find((e) => e.e > state.t) || mineHere[mineHere.length - 1];
+    const myLine = my ? `<span class="pk-my">Ваша пара ${my.startHM}–${my.endHM} · ${esc(my.title)}</span>` : "";
     peek.innerHTML = `
-      <div class="pk-main"><b>${state.room}</b><span class="status-pill ${st.st}">${text}</span></div>
+      <div class="pk-main"><b>${state.room}</b><span class="status-pill ${st.st}">${text}</span>${myLine}</div>
       <button class="pk-go" data-go="list">Пары →</button>
       <button class="pk-x" title="Сбросить выбор">×</button>`;
     peek.querySelector(".pk-go").onclick = () => setView("list");
@@ -657,10 +750,11 @@
     box.innerHTML = `
       <div class="room-card">
         <div class="top">
-          <div><div class="code">${room}</div><div class="where">Аудитория · ${roomFloor[room]} этаж · ${CAMPUSES[roomCampus[room]].short}</div></div>
+          <span class="code">${room}</span>
+          <span class="where">${roomFloor[room]} этаж · ${CAMPUSES[roomCampus[room]].short}</span>
+          ${pill}
           <button class="close" id="clearRoom" title="Сбросить выбор">×</button>
         </div>
-        ${pill}
         <div class="timeline">${blocks}${now}</div>
         <div class="tl-scale"><span>08</span><span>10</span><span>12</span><span>14</span><span>16</span><span>18</span><span>20</span><span>22</span></div>
         <div class="windows">Свободные окна: ${wins || "нет"}</div>
@@ -692,7 +786,7 @@
     }
     html += "</div>";
     box.innerHTML = html;
-    box.querySelectorAll("[data-pick]").forEach((b) => (b.onclick = () => selectRoom(b.dataset.pick)));
+    box.querySelectorAll("[data-pick]").forEach((b) => (b.onclick = () => pickRoom(b.dataset.pick)));
   }
 
   function renderEvents() {
@@ -740,12 +834,205 @@
       html += `<li class="data-stamp">Расписание от ${dayFmt.format(d)}, ${fmt(d.getHours() * 60 + d.getMinutes())} · <a href="https://cu-schedule.ru/" target="_blank" rel="noopener">cu-schedule.ru</a></li>`;
     }
     list.innerHTML = html;
-    list.querySelectorAll("[data-pick]").forEach((b) => (b.onclick = () => selectRoom(b.dataset.pick)));
+    list.querySelectorAll("[data-pick]").forEach((b) => (b.onclick = () => pickRoom(b.dataset.pick)));
     const pt = $("pastToggle");
     if (pt) pt.onclick = () => { state.showPast = !state.showPast; renderEvents(); };
   }
 
-  function renderSide() { renderHead(); renderRoomCard(); renderFree(); renderEvents(); }
+  /* ---------- мои пары */
+  const PARTSTAT = [
+    ["ACCEPTED", "Приду", "yes"],
+    ["TENTATIVE", "Возможно", "maybe"],
+    ["DECLINED", "Не приду", "no"],
+  ];
+  const IC = {
+    sync: '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 0 1-14.3 4.9M4 12a8 8 0 0 1 14.3-4.9"/><path d="M18.5 3v4.2h-4.2M5.5 21v-4.2h4.2"/></svg>',
+    video: '<svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2.5"/><path d="m16 10.5 5-3v9l-5-3"/></svg>',
+    cal: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="m9 15.5 2 2 4-4"/></svg>',
+  };
+  let rsvpHint = null; // { id, partstat, timer }: предложить отметить всю серию
+
+  function loginCard() {
+    return `
+      <div class="login-card">
+        <div class="lc-top"><span class="lc-ic lc-violet">${IC.cal}</span>
+          <div class="lc-text"><b>Мои пары</b><small>Из вашего Яндекс Календаря ЦУ</small></div></div>
+        <p>Только ваши пары с аудиториями на плане, ссылки на звонки и отметки «приду / не приду», как в календаре на телефоне.</p>
+        <div class="form-error" id="acctError" hidden></div>
+        <form id="loginForm" class="login-form" autocomplete="on">
+          <label>Почта ЦУ<input name="login" type="email" inputmode="email" autocomplete="username" placeholder="i.ivanov@edu.centraluniversity.ru" required></label>
+          <label>Пароль приложения<input name="password" type="password" autocomplete="current-password" placeholder="16 символов от Яндекса" required></label>
+          <div class="form-error" id="loginError" hidden></div>
+          <button type="submit" class="primary-btn" id="loginBtn">Войти</button>
+        </form>
+        <details class="howto">
+          <summary>Где взять пароль приложения</summary>
+          <ol>
+            <li>Откройте <a href="https://id.yandex.ru/security/app-passwords" target="_blank" rel="noopener">Яндекс ID → Пароли приложений</a>, войдите через аккаунт ЦУ.</li>
+            <li>Нажмите «Календарь» и назовите пароль, например «Расписание ЦУ».</li>
+            <li>Скопируйте пароль, который покажет Яндекс, и вставьте сюда.</li>
+          </ol>
+          <p>Отозвать доступ можно там же в любой момент.</p>
+        </details>
+        <p class="fine">Пароль приложения открывает только календарь. На устройстве хранится зашифрованный ключ сессии, пароль в открытом виде нигде не сохраняется.</p>
+      </div>`;
+  }
+
+  function syncLine() {
+    if (A.syncing) return "Обновляю…";
+    if (A.error) return esc(A.error);
+    if (!A.fetchedAt) return "";
+    const d = new Date(A.fetchedAt);
+    const today = iso(d) === todayIso();
+    return `Обновлено ${today ? "" : dayFmt.format(d) + ", "}в ${fmt(d.getHours() * 60 + d.getMinutes())}`;
+  }
+
+  function rsvpControl(e) {
+    if (!e.partstat) return "";
+    const busy = A.isPending(e.id);
+    return `<div class="rsvp${busy ? " busy" : ""}" role="group" aria-label="Присутствие">${PARTSTAT.map(([v, label, cls]) =>
+      `<button class="${cls}${e.partstat === v ? " on" : ""}" data-ps="${v}" aria-pressed="${e.partstat === v}"${busy ? " disabled" : ""}>${label}</button>`).join("")}</div>`;
+  }
+
+  function mineItem(e, t, isToday) {
+    const cls = isToday && e.e <= t ? "past" : isToday && e.s <= t ? "now" : "";
+    let place;
+    if (e.online) place = `<span class="online-tag">Онлайн</span>`;
+    else if (e.rooms.length) {
+      place = e.rooms.map((r) => roomFloor[r]
+        ? `<button class="room ${r === state.room ? "sel" : ""}" data-pick="${r}" title="Показать на плане">${r}</button>`
+        : `<span class="room off">${esc(r)}</span>`).join("");
+      if (e.campus === "DUCAT") place += `<span class="campus-tag">Дукат</span>`;
+      else if (e.campus === "OTHER") place += `<span class="campus-tag">${esc(e.campusName || "")}</span>`;
+    } else place = e.location ? `<span>${esc(e.location)}</span>` : "";
+    const kind = e.type === "Лекция" ? "lec" : /Контрольная|Экзамен|Пересдача/.test(e.type) ? "ctrl" : e.type === "Семинар" ? "" : "other";
+    const meta = [e.teachers, e.timetable ? "" : e.calendar].filter(Boolean).map(esc).join(" · ");
+    const join = e.url ? `<a class="join${e.online ? " primary" : ""}" href="${esc(e.url)}" target="_blank" rel="noopener">${IC.video}${e.online ? "Подключиться" : "Звонок"}</a>` : "";
+    const hint = rsvpHint && rsvpHint.id === e.id
+      ? `<div class="rsvp-hint">Отмечено для этого занятия. <button data-series="${rsvpHint.partstat}">Отметить всю серию</button></div>` : "";
+    const time = e.allDay ? `<div class="t">весь<span>день</span></div>` : `<div class="t">${e.startHM}<span>${e.endHM}</span></div>`;
+    return `<li class="ev my ${cls}${e.partstat === "DECLINED" ? " declined" : ""}" data-id="${esc(e.id)}">
+      ${time}
+      <div>
+        <div class="title">${esc(e.title)}</div>
+        <div class="meta">${place}${e.type ? `<span class="kind ${kind}">${esc(e.type)}</span>` : ""}${meta ? `<span>${meta}</span>` : ""}</div>
+        ${join || e.partstat ? `<div class="ev-actions">${join}${rsvpControl(e)}</div>` : ""}
+        ${hint}
+      </div></li>`;
+  }
+
+  function renderMine() {
+    const box = $("mine");
+    if (!A.user) {
+      // форму не перерисовываем: иначе пропадёт уже введённое
+      if (!box.querySelector("#loginForm")) box.innerHTML = loginCard();
+      const err = $("acctError");
+      err.textContent = A.error || "";
+      err.hidden = !A.error;
+      return;
+    }
+    A.ensure(state.date);
+    const evs = myEvents(state.date);
+    const loading = !A.covers(state.date);
+    const isToday = state.date === todayIso(), t = state.t;
+    let html = `<div class="list-head"><h2>Мои пары${loading ? "" : " · " + evs.length}</h2>
+      <button class="icon-btn sync-btn${A.syncing ? " spin" : ""}" id="syncBtn" title="Обновить из календаря">${IC.sync}</button></div>
+      <div class="sync-state${A.error ? " err" : ""}">${syncLine()}</div><ol class="events">`;
+    if (loading) html += `<li class="empty">Загружаю расписание на эту дату…</li>`;
+    else if (!evs.length) html += `<li class="empty">В этот день пар нет</li>`;
+    let lineDone = !isToday;
+    for (const e of evs) {
+      if (!lineDone && e.s > t) { html += `<li class="now-line">${fmt(t)}</li>`; lineDone = true; }
+      html += mineItem(e, t, isToday);
+    }
+    html += `</ol><div class="account-line"><span>${esc(A.user.name || A.user.email)}</span><button id="logoutBtn">Выйти</button></div>`;
+    box.innerHTML = html;
+  }
+
+  function toast(text) {
+    const el = $("toast");
+    el.textContent = text;
+    el.hidden = false;
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => { el.hidden = true; }, 4200);
+  }
+
+  async function mark(ev, partstat, scope) {
+    try {
+      await A.rsvp(ev, partstat, scope);
+      if (tgAt("6.1")) tg.HapticFeedback.notificationOccurred("success");
+      if (scope === "series") toast("Отмечено для всех будущих занятий серии");
+    } catch (e) {
+      if (tgAt("6.1")) tg.HapticFeedback.notificationOccurred("error");
+      toast(e.code === "forbidden" ? "Яндекс не разрешил изменить это событие" : `Не удалось отметить: ${e.message}`);
+    }
+  }
+
+  $("mine").addEventListener("click", (e) => {
+    const t = e.target.closest("button");
+    if (!t) return;
+    const li = t.closest("[data-id]");
+    const ev = li && myEvents(state.date).find((x) => x.id === li.dataset.id);
+    if (t.dataset.pick) {
+      pickRoom(t.dataset.pick);
+    } else if (t.dataset.ps && ev) {
+      const v = t.dataset.ps;
+      if (ev.partstat === v) return;
+      clearTimeout(rsvpHint && rsvpHint.timer);
+      rsvpHint = ev.recurring ? { id: ev.id, partstat: v, timer: setTimeout(() => { rsvpHint = null; renderMine(); }, 12000) } : null;
+      mark(ev, v, "one");
+    } else if (t.dataset.series && ev) {
+      clearTimeout(rsvpHint.timer);
+      rsvpHint = null;
+      mark(ev, t.dataset.series, "series");
+    } else if (t.id === "syncBtn") {
+      A.sync({ force: true });
+    } else if (t.id === "logoutBtn") {
+      A.logout();
+      toast("Вы вышли. Пароль приложения можно отозвать в Яндекс ID");
+    }
+  });
+
+  $("mine").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const btn = f.querySelector("#loginBtn"), err = f.querySelector("#loginError");
+    btn.disabled = true; btn.textContent = "Проверяю…"; err.hidden = true;
+    try {
+      await A.loginWithPassword(f.login.value, f.password.value);
+      if (tgAt("6.1")) tg.HapticFeedback.notificationOccurred("success");
+    } catch (x) {
+      err.textContent = x.code === "auth" ? "Яндекс не принял почту или пароль. Нужен именно пароль приложения для календаря." : x.message;
+      err.hidden = false;
+      btn.disabled = false; btn.textContent = "Войти";
+    }
+  });
+
+  function renderMode() {
+    $("modeBar").hidden = !A.enabled;
+    $("modeSeg").querySelectorAll("button").forEach((b) => b.classList.toggle("on", (b.dataset.mode === "mine") === state.mine));
+    $("mine").hidden = !state.mine;
+    $("allPart").hidden = state.mine;
+  }
+  function setMode(mine) {
+    state.mine = mine;
+    try { localStorage.setItem("cu.mode", mine ? "mine" : "all"); } catch (e) { /* приватный режим */ }
+    renderSide();
+  }
+  $("modeSeg").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-mode]");
+    if (b) setMode(b.dataset.mode === "mine");
+  });
+
+  A.onChange((why) => {
+    if (why === "login") state.mine = true;
+    renderFloorSeg(); paintRooms(); renderSide();
+  });
+
+  function renderSide() {
+    renderHead(); renderMode(); renderRoomCard();
+    if (state.mine) renderMine(); else { renderFree(); renderEvents(); }
+  }
   function renderAll() { renderFloorSeg(); paintRooms(); renderSide(); writeHash(); syncTgBackButton(); }
 
   /* ============================================================ Действия */
@@ -790,6 +1077,12 @@
     updateCenter();
     buildPlan();
     renderAll();
+  }
+  // Аудитория из списка: выбрать, на телефоне открыть план, приблизить
+  function pickRoom(room) {
+    selectRoom(room);
+    if (window.matchMedia("(max-width: 900px)").matches) setView("plan");
+    focusRoom(room);
   }
   function selectRoom(room) {
     if (room && roomCampus[room] !== state.campus) {
@@ -881,4 +1174,6 @@
   buildPlan();
   setView(state.view, { silent: true });
   renderAll();
+  // сразу показываем сохранённое, затем сверяемся с календарём
+  if (A.user) A.sync();
 })();

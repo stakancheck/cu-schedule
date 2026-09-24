@@ -159,6 +159,7 @@ body {
   font: 14px/1.4 Onest, "Graphik LC", system-ui, -apple-system, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+[hidden] { display: none !important; }
 button { font: inherit; color: inherit; cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .45; }
 
@@ -216,6 +217,14 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .seg.many .fl-w { display: none; }
 .seg.many button { padding: 6px 10px; }
 .seg.small button { padding: 4px 10px; font-size: 12px; }
+/* Точка на этаже или кампусе, где сегодня мои пары */
+.seg button.has-mine { position: relative; }
+.seg button.has-mine::after {
+  content: ""; position: absolute; top: 3px; right: 3px;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 0 1.5px var(--chip);
+}
+.seg button.has-mine.on::after { box-shadow: 0 0 0 1.5px var(--ink); }
 
 .tools { display: flex; align-items: center; gap: 6px; }
 .sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
@@ -278,6 +287,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .sw.busy { background: var(--busy); }
 .sw.kitchen { background: var(--kitchen-tag); }
 .sw.staff { background: var(--staff-tag); }
+.sw.mine { background: var(--accent); }
 
 .tooltip {
   position: absolute;
@@ -339,6 +349,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .r.class.soon { fill: var(--soon); }
 .r.class.busy { fill: var(--busy); }
 .r.class:hover { stroke-width: 3.5; }
+/* Аудитории, где сегодня мои пары: обводка и фиолетовая подпись */
+.r.class.mine { stroke: var(--accent); stroke-width: 4.5; }
+.room-lbl.mine .tagbox { fill: var(--accent); }
+.room-lbl.mine .tagtxt { fill: #fff; }
 .r.class.sel { stroke: var(--accent); stroke-width: 6; }
 .rooms.has-sel .r.class:not(.sel) { opacity: .55; }
 
@@ -430,23 +444,24 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   border: 1px solid var(--accent);
   background: var(--accent-soft);
   border-radius: var(--radius);
-  padding: 12px 14px;
-  margin-bottom: 16px;
+  padding: 9px 12px 10px;
+  margin-bottom: 14px;
 }
-.room-card .top { display: flex; align-items: center; gap: 10px; }
-.room-card .code { font-size: 26px; font-weight: 600; }
-.room-card .where { color: var(--ink-2); font-size: 12px; }
-.room-card .close { margin-left: auto; border: 0; background: transparent; font-size: 20px; line-height: 1; color: var(--ink-2); padding: 4px; }
+.room-card .top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.room-card .code { font-size: 18px; font-weight: 600; line-height: 1; }
+.room-card .where { color: var(--ink-2); font-size: 12px; white-space: nowrap; }
+.room-card .status-pill { margin: 0 0 0 auto; padding: 2px 7px; font-size: 11px; white-space: nowrap; }
+.room-card .close { border: 0; background: transparent; font-size: 18px; line-height: 1; color: var(--ink-2); padding: 2px 2px 2px 4px; }
 .status-pill { display: inline-block; margin-top: 8px; padding: 3px 9px; border-radius: 6px; font-size: 12px; font-weight: 600; }
 .status-pill.free { background: var(--free); color: var(--free-ink); }
 .status-pill.soon { background: var(--soon); color: var(--soon-ink); }
 .status-pill.busy { background: var(--busy); color: var(--busy-ink); }
 
-.timeline { position: relative; height: 26px; margin: 12px 0 4px; background: var(--free); border-radius: 6px; overflow: hidden; }
+.timeline { position: relative; height: 12px; margin: 9px 0 3px; background: var(--free); border-radius: 4px; overflow: hidden; }
 .timeline .blk { position: absolute; top: 0; bottom: 0; background: var(--busy-ink); opacity: .75; }
 .timeline .now { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); }
 .tl-scale { display: flex; justify-content: space-between; font-size: 10px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.windows { margin-top: 8px; font-size: 12px; color: var(--ink-2); }
+.windows { margin-top: 5px; font-size: 12px; color: var(--ink-2); }
 .windows b { color: var(--free-ink); font-variant-numeric: tabular-nums; }
 
 .list-head { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 8px; }
@@ -500,6 +515,102 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .credits a:hover { text-decoration: underline; }
 .empty { padding: 28px 8px; text-align: center; color: var(--ink-3); }
 
+/* ------------------------------------------------------------ Мои пары */
+.mode-bar { margin-bottom: 14px; }
+.mode-bar .seg { display: flex; }
+.mode-bar .seg button { flex: 1; padding: 7px 12px; }
+
+.sync-btn { width: 30px; height: 30px; }
+.sync-btn svg { width: 16px; height: 16px; }
+.sync-btn.spin svg { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.sync-state { font-size: 12px; color: var(--ink-3); margin: -4px 0 6px; min-height: 16px; }
+.sync-state.err { color: var(--busy-ink); }
+
+.ev.my .meta .online-tag, .ev.my .meta .campus-tag {
+  font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 3px;
+}
+.ev.my .online-tag { background: color-mix(in srgb, var(--b-sem) 18%, transparent); color: var(--b-sem); }
+.ev.my .campus-tag { background: var(--chip); color: var(--ink-2); }
+.ev .room.off { background: var(--chip); color: var(--ink-2); cursor: default; }
+.ev.my .room[data-pick] { cursor: pointer; }
+.ev.my .room[data-pick]:hover { background: var(--accent); color: #fff; }
+.ev.my.declined .title { text-decoration: line-through; text-decoration-color: var(--ink-3); color: var(--ink-2); }
+
+.ev-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 9px; }
+.join {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: var(--radius-s); border: 1px solid var(--line);
+  color: var(--ink); text-decoration: none; font-size: 12px; font-weight: 500;
+  transition: border-color .2s, background .2s;
+}
+.join svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.join:hover { border-color: var(--ink-3); background: var(--chip); }
+.join.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.join.primary:hover { background: color-mix(in srgb, var(--accent) 86%, #000); }
+
+.rsvp { display: inline-flex; background: var(--chip); border-radius: var(--radius-s); padding: 2px; gap: 2px; }
+.rsvp button {
+  border: 0; background: transparent; color: var(--ink-2);
+  font-size: 12px; font-weight: 500; padding: 4px 9px; border-radius: 6px;
+  transition: background .15s, color .15s;
+}
+.rsvp button:hover:not(.on):not(:disabled) { color: var(--ink); }
+.rsvp button.yes.on { background: var(--free); color: var(--free-ink); }
+.rsvp button.maybe.on { background: var(--soon); color: var(--soon-ink); }
+.rsvp button.no.on { background: var(--busy); color: var(--busy-ink); }
+.rsvp.busy { opacity: .6; }
+.rsvp.busy button:disabled { cursor: progress; opacity: 1; }
+.rsvp-hint { margin-top: 7px; font-size: 12px; color: var(--ink-2); }
+.rsvp-hint button { border: 0; background: none; padding: 0; color: var(--accent-ink); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
+
+.account-line {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-top: 14px; padding-top: 10px; font-size: 12px; color: var(--ink-3);
+}
+.account-line span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-line button { border: 0; background: none; color: var(--ink-2); font-size: 12px; font-weight: 500; padding: 2px 0; }
+.account-line button:hover { color: var(--busy-ink); }
+
+.login-card { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.login-card .lc-top { display: grid; grid-template-columns: 36px 1fr; gap: 12px; align-items: center; }
+.login-card p { margin: 10px 0 0; color: var(--ink-2); font-size: 13px; }
+.login-form { display: grid; gap: 10px; margin-top: 14px; }
+.login-form label { display: grid; gap: 5px; font-size: 12px; font-weight: 500; color: var(--ink-2); }
+.login-form input {
+  width: 100%; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  border-radius: var(--radius-s); padding: 9px 12px; font: inherit; font-size: 16px; outline: none;
+  transition: border-color .2s;
+}
+.login-form input:focus { border-color: var(--accent); }
+.primary-btn {
+  border: 0; background: var(--accent); color: #fff; border-radius: var(--radius-s);
+  padding: 10px 14px; font-weight: 600; transition: background .2s;
+}
+.primary-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 86%, #000); }
+.form-error {
+  margin-top: 10px; padding: 8px 10px; border-radius: var(--radius-s);
+  background: var(--busy); color: var(--busy-ink); font-size: 12px; font-weight: 500;
+}
+.login-form .form-error { margin-top: 0; }
+.howto { margin-top: 12px; font-size: 13px; color: var(--ink-2); }
+.howto summary { cursor: pointer; color: var(--accent-ink); font-weight: 500; }
+.howto ol { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 4px; }
+.howto a { color: var(--accent-ink); }
+.howto p { margin-top: 6px; }
+.login-card .fine { font-size: 11px; color: var(--ink-3); }
+
+.room-peek .pk-my { font-size: 12px; color: var(--accent-ink); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.toast {
+  position: fixed; z-index: 30; left: 50%; translate: -50% 0;
+  bottom: calc(24px + var(--safe-bottom));
+  max-width: min(420px, calc(100% - 32px));
+  padding: 10px 14px; border-radius: var(--radius);
+  background: var(--ink); color: var(--panel); font-size: 13px; font-weight: 500;
+  box-shadow: 0 10px 30px rgba(0,0,0,.22);
+  animation: peek-in .25s cubic-bezier(.2, 0, .3, 1);
+}
 
 /* ------------------------------------------------------------ Полезное */
 .useful { margin-top: 22px; display: grid; gap: 8px; }
@@ -556,6 +667,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .side-head { padding: 12px; }
   .side-body { padding: 12px 12px 0; }
   .ev.now::before { left: -12px; }
+  .toast { bottom: calc(var(--tabbar-h) + 22px + var(--safe-bottom)); width: max-content; }
 
   /* Панель плана: [кампус][этажи] / [Этаж N ... инструменты] */
   .plan-bar {
@@ -585,17 +697,18 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .room-peek:not([hidden]) {
     display: flex; align-items: center; gap: 10px;
     position: absolute; left: 10px; right: 10px; bottom: 44px;
-    padding: 10px 10px 10px 14px;
+    padding: 7px 6px 7px 12px;
     background: var(--panel); border: 1px solid var(--accent); border-radius: var(--radius);
     box-shadow: 0 10px 30px rgba(0,0,0,.18);
     animation: peek-in .25s cubic-bezier(.2, 0, .3, 1);
   }
-  .room-peek .pk-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-  .room-peek .pk-main b { font-size: 20px; font-weight: 600; line-height: 1; }
-  .room-peek .status-pill { margin: 0; align-self: flex-start; }
+  .room-peek .pk-main { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 3px 8px; }
+  .room-peek .pk-main b { font-size: 17px; font-weight: 600; line-height: 1; }
+  .room-peek .status-pill { margin: 0; padding: 2px 7px; font-size: 11px; }
+  .room-peek .pk-my { flex-basis: 100%; }
   .room-peek .pk-go {
     border: 0; background: var(--accent); color: #fff; border-radius: var(--radius-s);
-    padding: 9px 12px; font-weight: 500; font-size: 13px;
+    padding: 7px 11px; font-weight: 500; font-size: 13px;
   }
   .room-peek .pk-x { border: 0; background: transparent; color: var(--ink-3); font-size: 22px; line-height: 1; padding: 4px 6px; }
 
