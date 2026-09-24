@@ -444,11 +444,11 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 
 .events { list-style: none; margin: 0; padding: 0; }
 .ev {
+  position: relative;
   display: grid;
   grid-template-columns: 58px 1fr;
   gap: 10px;
-  padding: 10px 8px;
-  border-radius: 10px;
+  padding: 12px 2px;
   border-bottom: 1px solid var(--line);
 }
 .ev .t { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; line-height: 1.25; }
@@ -465,7 +465,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .ev .kind.ctrl { color: var(--b-ctrl); }
 .ev .kind.other { color: var(--ink-3); }
 .ev.past { opacity: .45; }
-.ev.now { background: var(--accent-soft); border-bottom-color: transparent; box-shadow: inset 3px 0 0 var(--accent); }
+/* Идущая пара: те же разделители, акцент полосой у края панели и цветом времени */
+.ev.now::before { content: ""; position: absolute; left: -16px; top: -1px; bottom: -1px; width: 3px; background: var(--accent); }
+.ev.now .t { color: var(--accent-ink); }
+.ev.now .title { font-weight: 600; }
 .ev.now .t::after { content: "сейчас"; display: block; margin-top: 3px; font-size: 10px; font-weight: 600; text-transform: uppercase; color: var(--accent-ink); letter-spacing: .04em; }
 .now-line { list-style: none; display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 11px; font-weight: 600; color: var(--accent-ink); }
 .now-line::before, .now-line::after { content: ""; flex: 1; height: 1.5px; background: var(--accent); opacity: .6; }
