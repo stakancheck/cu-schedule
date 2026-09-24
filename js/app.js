@@ -19,7 +19,9 @@
 
   function syncTgColors() {
     if (!tgAt("6.1")) return;
-    const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+    // на телефоне фон экрана - цвет панели (без карточек-островков)
+    const phone = window.matchMedia("(max-width: 900px)").matches;
+    const bg = getComputedStyle(document.documentElement).getPropertyValue(phone ? "--panel" : "--bg").trim();
     if (!/^#[0-9a-f]{6}$/i.test(bg)) return;
     tg.setHeaderColor(bg);
     tg.setBackgroundColor(bg);

@@ -640,26 +640,31 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 /* ------------------------------------------------------------ Мобилка */
 @media (max-width: 900px) {
   :root { --tabbar-h: 64px; }
+  :root { --tab-space: calc(var(--tabbar-h) + 18px + var(--safe-bottom)); }
   html, body { height: 100%; overflow: hidden; }
-  /* Экран = одна вкладка, прокрутка внутри вкладки, меню плавает поверх */
+  body { background: var(--panel); }
+  /* Экран = одна вкладка без карточек-островков: блоки встык на всю ширину,
+     прокрутка внутри вкладки, меню плавает поверх */
   .app {
     display: flex; flex-direction: column;
     height: var(--app-h);
-    padding: calc(8px + var(--safe-top)) calc(8px + var(--safe-right)) 0 calc(8px + var(--safe-left));
-    gap: 8px;
+    padding: var(--safe-top) var(--safe-right) 0 var(--safe-left);
+    gap: 0;
   }
+  .side, .plan-pane { border: 0; border-radius: 0; background: transparent; }
   .side { order: -1; flex: 1; min-height: 0; }
   /* нижний отступ под плавающее меню, иначе конец списка прячется под ним */
   .side-body {
     overflow: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y;
-    padding: 12px 12px calc(var(--tabbar-h) + 28px + var(--safe-bottom));
+    padding: 12px 12px calc(var(--tab-space) + 10px);
   }
 
   /* Вкладка «План»: дата и время сверху, план на остаток экрана */
   .app[data-view="plan"] .side { flex: none; }
   .app[data-view="plan"] .side-body { display: none; }
-  .app[data-view="plan"] .side-head { border-bottom: 0; padding: 10px 12px; }
-  .app[data-view="plan"] .plan-pane { flex: 1; min-height: 0; margin-bottom: calc(var(--tabbar-h) + 18px + var(--safe-bottom)); }
+  .app[data-view="plan"] .side-head { padding: 10px 12px; }
+  /* план до низа экрана, меню плавает над ним; легенда остаётся над меню */
+  .app[data-view="plan"] .plan-pane { flex: 1; min-height: 0; }
   .app:not([data-view="plan"]) .plan-pane { display: none; }
 
   /* Вкладка «Расписание» */
@@ -693,7 +698,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .nav-col {
     display: flex; flex-direction: column; align-items: stretch; gap: 8px;
     position: absolute; z-index: 3; top: 8px; right: 8px;
-    max-height: calc(100% - 96px);
+    max-height: calc(100% - var(--tab-space) - 96px);
   }
   .nav-col .seg, .tools .compass {
     background: color-mix(in srgb, var(--panel) 55%, transparent);
@@ -708,17 +713,18 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   #floorSeg::-webkit-scrollbar { display: none; }
   #floorSeg button { flex: none; }
   .tools { position: absolute; z-index: 3; top: 8px; left: 8px; }
-  .compass { width: 44px; height: 44px; }
+  .compass { width: 38px; height: 38px; }
   .compass .rot-hint { display: block; }
+  .compass .needle-wrap { transform: scale(.6); }
   .fl-w { display: none; }
-  .plan-wrap { display: flex; flex-direction: column; }
+  .plan-wrap { display: flex; flex-direction: column; padding-bottom: var(--tab-space); }
   #plan { flex: 1; min-height: 0; height: auto; }
   .legend { position: static; font-size: 11px; gap: 4px 10px; padding: 6px 12px 10px; background: none; }
 
   /* Мини-карточка выбранной аудитории поверх плана */
   .room-peek:not([hidden]) {
     display: flex; align-items: center; gap: 10px;
-    position: absolute; left: 10px; right: 10px; bottom: 44px;
+    position: absolute; left: 10px; right: 10px; bottom: calc(var(--tab-space) + 44px);
     padding: 7px 6px 7px 12px;
     background: var(--panel); border: 1px solid var(--accent); border-radius: var(--radius);
     box-shadow: 0 10px 30px rgba(0,0,0,.18);
