@@ -37,8 +37,10 @@ CAMPUSES = {
         "src": "Downloads/plan-ducat.pdf", "out": "js/plans-ducat.js",
         "code": r"^(B\d{3,4}|F\d{3})$",
         "halls": {"F101", "B1004", "B1006"},  # действительно большие залы
-        "doors": [26, 40, 60, 90],  # пробуемые ширины проёмов, pt
-        "angles": [0, 90],          # направления стен, градусы
+        # проёмы закрываем морфологией по линиям: пробуемые ширины, pt
+        "gaps": "close", "doors": [26, 40, 60, 90],
+        "open": 10,   # pt: отростки уже этого срезаем
+        "eps": 1.2,   # pt: допуск упрощения контура
     },
     "ct": {
         "id": "CT", "name": "Центральный телеграф", "short": "ЦТ",
@@ -46,16 +48,17 @@ CAMPUSES = {
         "code": r"^[NSEW]\d{3}(\.\d)?$",
         "halls": set(),
         "class_label": "Аудитория",  # учебные показываем, даже если пар в них нет
-        "doors": [12, 18, 26, 40],  # стены тонкие, проёмы узкие, коридоры тоже
-        # южное крыло повёрнуто на ~6°, восточное на ~13° от вертикали
-        "angles": [0, -3, -6, -9, 3, 90, 77, 81, 85, 95, 99, 103],
+        # Стены - тонкие прямоугольники, часть крыльев повёрнута. Морфология
+        # на наклонных стенах заливает углы, поэтому проёмы закрываем в
+        # векторах: продлеваем свободные торцы стен вдоль их оси, pt.
+        "gaps": "extend", "doors": [6, 9, 12, 16, 22],
+        "open": 3, "eps": 0.5,
     },
 }
 
 S = 2.5      # масштаб pt -> единицы плана
 Z = 4        # масштаб растра для сегментации (px на pt)
 MAX_ROOM = 30000          # pt^2: больше - скорее всего протекли в коридор
-OPEN = 10                 # pt: отростки уже этого срезаем
 
 # ------------------------------------------------------------------ текст
 SPECIAL = {"˜": "П", "ˆ": "К", "˚": "О", "˛": "Н", "˙": "Л", "˘": "И", "˝": "М", "€": " ", "\x06": ""}
@@ -228,14 +231,71 @@ def rasterize(page_rect, drs, fill_even_odd=True):
     return img < 128
 
 
-def line_kernel(length, angle):
-    """Отрезок под углом: закрывает проём в стене, идущей под этим углом."""
-    a = np.radians(angle)
-    dx, dy = np.cos(a) * length / 2, np.sin(a) * length / 2
-    w, h = int(abs(dx)) * 2 + 1, int(abs(dy)) * 2 + 1
-    k = np.zeros((h, w), np.uint8)
-    cv2.line(k, (int(w / 2 - dx), int(h / 2 - dy)), (int(w / 2 + dx), int(h / 2 + dy)), 1, 1)
-    return k
+def subpaths(dr):
+    """Замкнутые куски пути как списки точек (кривые - по концам)."""
+    out, cur = [], None
+    for it in dr["items"]:
+        op = it[0]
+        if op in ("l", "c"):
+            a, b = it[1], it[-1]
+            if cur is None or abs(cur[-1].x - a.x) > 0.01 or abs(cur[-1].y - a.y) > 0.01:
+                cur = [a]
+                out.append(cur)
+            cur.append(b)
+        elif op == "re":
+            r = it[1]
+            out.append([r.tl, r.tr, r.br, r.bl])
+            cur = None
+        elif op == "qu":
+            q = it[1]
+            out.append([q.ul, q.ur, q.lr, q.ll])
+            cur = None
+    return out
+
+
+def simplify(pts, tol=0.05):
+    """Убираем повторы и точки на прямой: в PDF у стен бывают вырожденные рёбра."""
+    out = []
+    for p in pts:
+        if not out or np.linalg.norm(p - out[-1]) > tol:
+            out.append(p)
+    if len(out) > 1 and np.linalg.norm(out[0] - out[-1]) <= tol:
+        out.pop()
+    changed = True
+    while changed and len(out) > 3:
+        changed = False
+        for i in range(len(out)):
+            a, b, c = out[i - 1], out[i], out[(i + 1) % len(out)]
+            ab, bc = b - a, c - b
+            cross = abs(ab[0] * bc[1] - ab[1] * bc[0])
+            if cross <= tol * (np.linalg.norm(ab) + np.linalg.norm(bc)):
+                out.pop(i)
+                changed = True
+                break
+    return out
+
+
+def wall_ends(walls, max_thick=3):
+    """Торцы стен: короткое ребро контура, по бокам которого рёбра идут
+    навстречу друг другу (разворот). Возвращаем (угол1, угол2, направление наружу)."""
+    ends = []
+    for dr in walls:
+        for poly in subpaths(dr):
+            pts = simplify([np.array([p.x, p.y]) for p in poly])
+            k = len(pts)
+            if k < 4:
+                continue
+            for i in range(k):
+                a, b = pts[i], pts[(i + 1) % k]
+                prev, nxt = a - pts[i - 1], pts[(i + 2) % k] - b
+                cap = np.linalg.norm(b - a)
+                lp, ln = np.linalg.norm(prev), np.linalg.norm(nxt)
+                if not (0.2 < cap <= max_thick) or lp < 2 * cap or ln < 2 * cap:
+                    continue
+                if np.dot(prev, nxt) / (lp * ln) > -0.97:
+                    continue  # не разворот: угол или ступенька
+                ends.append((a, b, prev / lp))
+    return ends
 
 
 def inside(inner, outer, tol=0.5):
@@ -328,12 +388,27 @@ def parse_page(page, floor_n, cfg):
     void_mask = rasterize(page.rect, voids) if voids else np.zeros_like(floor_mask)
     wm = wall_mask.astype(np.uint8) * 255
     seg_cache = {}
+    free_ends = []
+    if cfg["gaps"] == "extend":
+        h, w = wall_mask.shape
+        for a, b, n in wall_ends(walls):
+            q = ((a + b) / 2 + n * 0.8) * Z  # чуть за торцом: не стена ли там
+            x, y = int(q[0]), int(q[1])
+            if 0 <= x < w and 0 <= y < h and not wall_mask[y, x] and floor_mask[y, x]:
+                free_ends.append((a, b, n))
 
     def segmentation(door):
         if door not in seg_cache:
-            closed = wm
-            for a in cfg["angles"]:
-                closed = cv2.morphologyEx(closed, cv2.MORPH_CLOSE, line_kernel(door * Z, a))
+            if cfg["gaps"] == "extend":
+                closed = wm.copy()
+                for a, b, n in free_ends:
+                    quad = np.array([a, b, b + n * door, a + n * door]) * Z
+                    cv2.fillPoly(closed, [np.round(quad).astype(np.int32)], 255)
+            else:
+                closed = wm
+                L = int(door * Z)
+                closed = cv2.morphologyEx(closed, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (L, 1)))
+                closed = cv2.morphologyEx(closed, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (1, L)))
             free = floor_mask & (closed == 0) & ~void_mask
             seg_cache[door] = cv2.connectedComponents(free.astype(np.uint8), connectivity=4)[1]
         return seg_cache[door]
@@ -350,12 +425,13 @@ def parse_page(page, floor_n, cfg):
         m = (labels == label).astype(np.uint8) * 255
         m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
         # срезаем узкие отростки в ниши и проёмы соседних кладовок
-        m = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((OPEN * Z, OPEN * Z), np.uint8))
+        k = cfg["open"] * Z
+        m = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((k, k), np.uint8))
         cs, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         c = max(cs, key=cv2.contourArea)
         area = cv2.contourArea(c)
         hull = cv2.contourArea(cv2.convexHull(c)) or 1
-        c = cv2.approxPolyDP(c, 1.2 * Z, True)
+        c = cv2.approxPolyDP(c, cfg["eps"] * Z, True)
         pts = [[round(float(p[0][0]) / Z * S, 1), round(float(p[0][1]) / Z * S, 1)] for p in c]
         return pts, area / Z / Z, area / hull
 
