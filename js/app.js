@@ -477,6 +477,7 @@
   let drag = null;
   const pointers = new Map();
   svg.addEventListener("pointerdown", (e) => {
+    if (e.pointerType !== "mouse") hideTip();
     pointers.set(e.pointerId, [e.clientX, e.clientY]);
     if (pointers.size === 2) {
       const [a, b] = [...pointers.values()];
@@ -522,7 +523,10 @@
   /* ---------- подсказка */
   const tip = $("tooltip");
   function hideTip() { tip.hidden = true; }
+  // Подсказка только для мыши: на тач-экране pointerover срабатывает при каждом
+  // касании (скролл, зум), а информацию по тапу и так показывает карточка аудитории.
   svg.addEventListener("pointerover", (e) => {
+    if (e.pointerType !== "mouse") return;
     const r = e.target.closest && e.target.closest("[data-room]");
     if (!r || drag) return;
     const room = r.dataset.room, st = roomStatus(room, state.date, state.t);
