@@ -659,7 +659,8 @@
         lineDone = true;
       }
       const cls = e.e <= t ? "past" : e.s <= t ? "now" : "";
-      const kind = e.type === "Лекция" ? "lec" : /Контрольная|Экзамен|Пересдача/.test(e.type) ? "ctrl" : "";
+      const kind = e.type === "Лекция" ? "lec" : /Контрольная|Экзамен|Пересдача/.test(e.type) ? "ctrl"
+        : e.type === "Семинар" ? "" : "other";
       const rooms = e.rooms.map((r) => `<button class="room ${r === state.room ? "sel" : ""}" data-pick="${r}">${r}</button>`).join("");
       const meta = [e.teachers, e.stream].filter(Boolean).map(esc).join(" · ");
       html += `<li class="ev ${cls}">
@@ -763,6 +764,21 @@
   }, 20000);
 
   window.addEventListener("resize", applyTransform);
+
+  // Тема: как в системе -> светлая -> тёмная
+  const THEMES = { auto: "как в системе", light: "светлая", dark: "тёмная" };
+  function applyTheme(mode) {
+    const root = document.documentElement;
+    if (mode === "auto") delete root.dataset.theme; else root.dataset.theme = mode;
+    $("themeBtn").dataset.mode = mode;
+    $("themeBtn").title = `Тема: ${THEMES[mode]}`;
+    try { mode === "auto" ? localStorage.removeItem("theme") : localStorage.setItem("theme", mode); } catch (e) { /* приватный режим */ }
+  }
+  applyTheme(document.documentElement.dataset.theme || "auto");
+  $("themeBtn").onclick = () => {
+    const order = ["auto", "light", "dark"];
+    applyTheme(order[(order.indexOf($("themeBtn").dataset.mode) + 1) % 3]);
+  };
 
   buildPlan();
   renderAll();
