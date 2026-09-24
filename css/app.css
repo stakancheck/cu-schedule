@@ -141,6 +141,16 @@
   color-scheme: dark;
 }
 
+/* Системные отступы: вырезы экрана (env) и зоны Telegram Mini App (--tg-*).
+   В полноэкранном режиме Telegram добавляет content-safe-area под свои кнопки. */
+:root {
+  --safe-top: max(env(safe-area-inset-top, 0px), calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px)));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), calc(var(--tg-safe-area-inset-bottom, 0px) + var(--tg-content-safe-area-inset-bottom, 0px)));
+  --safe-left: max(env(safe-area-inset-left, 0px), calc(var(--tg-safe-area-inset-left, 0px) + var(--tg-content-safe-area-inset-left, 0px)));
+  --safe-right: max(env(safe-area-inset-right, 0px), calc(var(--tg-safe-area-inset-right, 0px) + var(--tg-content-safe-area-inset-right, 0px)));
+  --app-h: var(--tg-viewport-stable-height, 100dvh);
+}
+
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {
@@ -157,8 +167,14 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   grid-template-columns: minmax(0, 1fr) 420px;
   gap: 12px;
   height: 100vh;
-  padding: 12px;
+  height: var(--app-h);
+  padding: calc(12px + var(--safe-top)) calc(12px + var(--safe-right)) calc(12px + var(--safe-bottom)) calc(12px + var(--safe-left));
 }
+
+/* Внутри Telegram: без «резинки» и подсветки тапов, чтобы жесты плана не конфликтовали */
+.tma body, html.tma { overscroll-behavior: none; }
+.tma body { -webkit-tap-highlight-color: transparent; }
+.tma button { -webkit-user-select: none; user-select: none; }
 
 /* ------------------------------------------------------------ План */
 .plan-pane {
@@ -484,7 +500,12 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 
 /* ------------------------------------------------------------ Мобилка */
 @media (max-width: 900px) {
-  .app { grid-template-columns: 1fr; grid-template-rows: auto auto; height: auto; min-height: 100vh; padding: 8px; gap: 8px; }
+  .app {
+    grid-template-columns: 1fr; grid-template-rows: auto auto;
+    height: auto; min-height: 100vh; min-height: var(--app-h);
+    padding: calc(8px + var(--safe-top)) calc(8px + var(--safe-right)) calc(8px + var(--safe-bottom)) calc(8px + var(--safe-left));
+    gap: 8px;
+  }
   .side { overflow: visible; }
   .side-body { overflow: visible; }
   /* Панель плана: [кампус][этажи] / [Этаж N ... инструменты] */

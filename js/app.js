@@ -11,6 +11,43 @@
   const SVGNS = "http://www.w3.org/2000/svg";
   const $ = (id) => document.getElementById(id);
 
+  /* ============================================================ Telegram Mini App */
+  const tg = window.Telegram && window.Telegram.WebApp;
+  // вне Telegram скрипт тоже грузится, но platform = "unknown"
+  const inTg = !!(tg && tg.platform && tg.platform !== "unknown");
+  const tgAt = (v) => inTg && tg.isVersionAtLeast(v);
+
+  function syncTgColors() {
+    if (!tgAt("6.1")) return;
+    const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+    if (!/^#[0-9a-f]{6}$/i.test(bg)) return;
+    tg.setHeaderColor(bg);
+    tg.setBackgroundColor(bg);
+    if (tgAt("7.10")) tg.setBottomBarColor(bg);
+  }
+
+  function initTelegram() {
+    if (!inTg) return;
+    document.documentElement.classList.add("tma");
+    tg.ready();
+    tg.expand();
+    // иначе перетаскивание плана вниз сворачивает мини-апп
+    if (tgAt("7.7")) tg.disableVerticalSwipes();
+    if (tgAt("6.1")) tg.BackButton.onClick(() => selectRoom(null));
+    // внешние ссылки открываем через Telegram, а не внутри мини-аппа
+    document.addEventListener("click", (e) => {
+      const a = e.target.closest && e.target.closest('a[target="_blank"]');
+      if (!a) return;
+      e.preventDefault();
+      tg.openLink(a.href);
+    });
+  }
+
+  function syncTgBackButton() {
+    if (!tgAt("6.1")) return;
+    if (state.room) tg.BackButton.show(); else tg.BackButton.hide();
+  }
+
   /* ============================================================ Данные */
   const toMin = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; };
   const fmt = (min) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
@@ -290,9 +327,9 @@
         const [cx, cy] = r.tag || centroid(r.pts);
         const g = upright(fg, cx, cy);
         const k = r.tagKind === "dark" ? "" : ({ kitchen: "tag-kitchen", staff: "tag-staff", wip: "tag-wip" }[r.kind] || "");
-        const tg = tag(g, r.label, { size: 13, cls: k });
-        if (r.vertical) tg.setAttribute("transform", "rotate(-90)");
-        tg.style.pointerEvents = "none";
+        const tagEl = tag(g, r.label, { size: 13, cls: k });
+        if (r.vertical) tagEl.setAttribute("transform", "rotate(-90)");
+        tagEl.style.pointerEvents = "none";
       }
     }
 
@@ -345,8 +382,8 @@
         const [x, y] = r.tag;
         const g = upright(fg, x, y);
         const text = r.label ? `${short(r.label)} · ${r.id}` : r.id;
-        const tg = tag(g, text, { size: 11, cls: isCowork(r) ? "tag-open" : TAG_CLS[r.color] || "", padX: 6 });
-        el("title", {}, tg).textContent = r.label ? `${r.id}: ${r.label}` : r.id;
+        const tagEl = tag(g, text, { size: 11, cls: isCowork(r) ? "tag-open" : TAG_CLS[r.color] || "", padX: 6 });
+        el("title", {}, tagEl).textContent = r.label ? `${r.id}: ${r.label}` : r.id;
       }
     }
   }
@@ -681,7 +718,7 @@
   }
 
   function renderSide() { renderHead(); renderRoomCard(); renderFree(); renderEvents(); }
-  function renderAll() { renderFloorSeg(); paintRooms(); renderSide(); writeHash(); }
+  function renderAll() { renderFloorSeg(); paintRooms(); renderSide(); writeHash(); syncTgBackButton(); }
 
   /* ============================================================ Действия */
   function setFloor(n) {
@@ -708,6 +745,7 @@
       state.campus = roomCampus[room]; campus = CAMPUSES[state.campus]; updateCenter();
       state.floor = -1;
     }
+    if (room && room !== state.room && tgAt("6.1")) tg.HapticFeedback.selectionChanged();
     state.room = room;
     if (room && roomFloor[room] !== state.floor) { state.floor = roomFloor[room]; buildPlan(); }
     hideTip();
@@ -769,17 +807,26 @@
   const THEMES = { auto: "как в системе", light: "светлая", dark: "тёмная" };
   function applyTheme(mode) {
     const root = document.documentElement;
-    if (mode === "auto") delete root.dataset.theme; else root.dataset.theme = mode;
+    // «как в системе» внутри Telegram = тема Telegram, а не ОС
+    if (mode === "auto") {
+      if (inTg) root.dataset.theme = tg.colorScheme === "dark" ? "dark" : "light";
+      else delete root.dataset.theme;
+    } else root.dataset.theme = mode;
     $("themeBtn").dataset.mode = mode;
     $("themeBtn").title = `Тема: ${THEMES[mode]}`;
     try { mode === "auto" ? localStorage.removeItem("theme") : localStorage.setItem("theme", mode); } catch (e) { /* приватный режим */ }
+    syncTgColors();
   }
-  applyTheme(document.documentElement.dataset.theme || "auto");
+  let storedTheme = "auto";
+  try { storedTheme = localStorage.getItem("theme") || "auto"; } catch (e) { /* приватный режим */ }
+  applyTheme(THEMES[storedTheme] ? storedTheme : "auto");
+  if (inTg) tg.onEvent("themeChanged", () => { if ($("themeBtn").dataset.mode === "auto") applyTheme("auto"); });
   $("themeBtn").onclick = () => {
     const order = ["auto", "light", "dark"];
     applyTheme(order[(order.indexOf($("themeBtn").dataset.mode) + 1) % 3]);
   };
 
+  initTelegram();
   buildPlan();
   renderAll();
 })();
