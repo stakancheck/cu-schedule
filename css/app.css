@@ -403,6 +403,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   border-radius: 10px; padding: 7px; font-size: 12px; font-weight: 600; color: var(--ink-3); margin-bottom: 4px;
 }
 .past-toggle:hover { color: var(--ink); border-color: var(--ink-3); }
+.data-stamp { list-style: none; margin-top: 14px; text-align: center; font-size: 11px; color: var(--ink-3); }
+.data-stamp a { color: inherit; }
 .empty { padding: 28px 8px; text-align: center; color: var(--ink-3); }
 
 @media (prefers-color-scheme: dark) {

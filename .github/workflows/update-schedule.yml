@@ -1,0 +1,55 @@
+name: Обновление расписания
+
+on:
+  schedule:
+    # 23:30 UTC = 02:30 МСК, после ночного обновления кэша cu-schedule.ru (~21:50 UTC)
+    - cron: "30 23 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Пересобрать базу, даже если xlsx не изменился"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: update-schedule
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install openpyxl
+
+      - id: update
+        run: python scripts/update.py ${{ inputs.force && '--force' || '' }}
+
+      - name: Коммит изменений
+        if: steps.update.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add raspisanie-spiskom.xlsx data/
+          if git diff --cached --quiet; then
+            echo "Нечего коммитить"
+            exit 0
+          fi
+          git commit -m "${{ steps.update.outputs.message }}"
+          git push
+
+      - name: Пересборка GitHub Pages
+        if: steps.update.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # пуш от GITHUB_TOKEN может не запустить сборку Pages, просим явно
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds" || true

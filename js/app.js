@@ -669,6 +669,10 @@
           <div class="meta">${rooms}<span class="kind ${kind}">${esc(e.type)}</span><span>${meta}</span></div>
         </div></li>`;
     }
+    if (S.updatedAt) {
+      const d = new Date(S.updatedAt);
+      html += `<li class="data-stamp">Расписание от ${dayFmt.format(d)}, ${fmt(d.getHours() * 60 + d.getMinutes())} · <a href="https://cu-schedule.ru/" target="_blank" rel="noopener">cu-schedule.ru</a></li>`;
+    }
     list.innerHTML = html;
     list.querySelectorAll("[data-pick]").forEach((b) => (b.onclick = () => selectRoom(b.dataset.pick)));
     const pt = $("pastToggle");

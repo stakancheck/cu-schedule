@@ -11,6 +11,7 @@
 """
 import csv
 import json
+import os
 import re
 import sys
 from collections import Counter
@@ -120,6 +121,8 @@ def main() -> None:
                 s(e["teachers"])] for e in events]
     payload = {
         "source": SRC.name,
+        # дата данных на сервере cu-schedule.ru, выставляет scripts/update.py
+        "updatedAt": os.environ.get("SCHEDULE_UPDATED_AT", ""),
         "fields": ["date", "start", "end", "title", "course", "type", "stream",
                    "rooms", "teachers"],
         "strings": dict_,

@@ -10,9 +10,22 @@ python3 -m http.server 8765
 
 Открыть http://localhost:8765. Без сервера (через `file://`) браузер не загрузит скрипты.
 
-## Обновить расписание
+Онлайн-версия: https://stakancheck.github.io/cu-schedule/
 
-Положить новый xlsx рядом и пересобрать базу:
+## Обновление расписания
+
+Автоматически: GitHub Actions (`.github/workflows/update-schedule.yml`) каждую ночь в 02:30 МСК
+скачивает выгрузку с [cu-schedule.ru](https://cu-schedule.ru/) (та же, что «Скачать Excel -> Списком ->
+Всё расписание»), и если файл изменился, пересобирает базу, коммитит и пересобирает Pages.
+Запустить вручную: вкладка Actions -> «Обновление расписания» -> Run workflow.
+
+Вручную локально:
+
+```bash
+python3 scripts/update.py
+```
+
+Или из своего xlsx:
 
 ```bash
 python3 scripts/build_db.py raspisanie-spiskom.xlsx
@@ -30,6 +43,7 @@ python3 scripts/parse_ducat.py ~/Downloads/plan-ducat.pdf
 
 ## Структура
 
+- `scripts/update.py` - скачивает свежий xlsx и пересобирает базу, если он изменился.
 - `scripts/build_db.py` - парсер xlsx (листы по неделям).
 - `data/schedule.csv` - полная база: одна строка на занятие, аудитории через `;`, дубли из исходника убраны.
 - `data/rooms.csv` - справочник аудиторий (кампус, этаж, число занятий).
