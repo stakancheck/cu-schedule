@@ -39,7 +39,9 @@
       const a = e.target.closest && e.target.closest('a[target="_blank"]');
       if (!a) return;
       e.preventDefault();
-      tg.openLink(a.href);
+      // ссылки на Telegram открываем нативно, остальные во внешнем браузере
+      if (/^https:\/\/t\.me\//.test(a.href)) tg.openTelegramLink(a.href);
+      else tg.openLink(a.href);
     });
   }
 

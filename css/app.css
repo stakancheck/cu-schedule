@@ -495,6 +495,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .past-toggle:hover { color: var(--ink); border-color: var(--ink-3); }
 .data-stamp { list-style: none; margin-top: 14px; text-align: center; font-size: 11px; color: var(--ink-3); }
 .data-stamp a { color: inherit; }
+.credits { margin-top: 6px; text-align: center; font-size: 12px; color: var(--ink-3); }
+.credits a { color: var(--accent-ink); font-weight: 500; text-decoration: none; }
+.credits a:hover { text-decoration: underline; }
 .empty { padding: 28px 8px; text-align: center; color: var(--ink-3); }
 
 
