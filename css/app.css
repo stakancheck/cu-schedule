@@ -253,6 +253,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .compass #needle { transition: transform .35s ease; }
 .compass .n { fill: var(--accent); }
 .compass .s { fill: var(--ink-3); }
+.compass .rot-hint { display: none; fill: none; stroke: var(--ink-2); stroke-width: 1.8; stroke-linecap: round; }
 .compass text { font-size: 7px; font-weight: 600; fill: #fff; text-anchor: middle; dominant-baseline: middle; }
 
 .plan-wrap {
@@ -406,6 +407,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .date-main input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .date-main input::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; }
 
+.date-ghost { display: none; }
+.nav-col { display: contents; }
 .quick-days { display: flex; gap: 6px; margin-top: 10px; justify-content: center; }
 .quick-days button {
   border: 1px solid var(--line); background: transparent;
@@ -646,13 +649,16 @@ button:disabled { cursor: not-allowed; opacity: .45; }
     gap: 8px;
   }
   .side { order: -1; flex: 1; min-height: 0; }
-  .side-body { overflow: auto; padding-bottom: calc(var(--tabbar-h) + 28px + var(--safe-bottom)); -webkit-overflow-scrolling: touch; }
+  /* нижний отступ под плавающее меню, иначе конец списка прячется под ним */
+  .side-body {
+    overflow: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y;
+    padding: 12px 12px calc(var(--tabbar-h) + 28px + var(--safe-bottom));
+  }
 
   /* Вкладка «План»: дата и время сверху, план на остаток экрана */
   .app[data-view="plan"] .side { flex: none; }
   .app[data-view="plan"] .side-body { display: none; }
   .app[data-view="plan"] .side-head { border-bottom: 0; padding: 10px 12px; }
-  .app[data-view="plan"] .quick-days { display: none; }
   .app[data-view="plan"] .plan-pane { flex: 1; min-height: 0; margin-bottom: calc(var(--tabbar-h) + 18px + var(--safe-bottom)); }
   .app:not([data-view="plan"]) .plan-pane { display: none; }
 
@@ -665,30 +671,46 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 
   .date-main .dnum { font-size: 20px; }
   .side-head { padding: 12px; }
-  .side-body { padding: 12px 12px 0; }
   .ev.now::before { left: -12px; }
   .toast { bottom: calc(var(--tabbar-h) + 22px + var(--safe-bottom)); width: max-content; }
 
-  /* Панель плана: [кампус][этажи] / [Этаж N ... инструменты] */
-  .plan-bar {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    grid-template-areas: "campus floors" "title tools";
-    gap: 8px;
-    padding: 8px;
+  /* Даты листаются свайпом: вместо стрелок и «Вчера/Сегодня/Завтра» соседние дни по краям */
+  #prevDay, #nextDay, .quick-days { display: none; }
+  .date-row { touch-action: pan-y; gap: 4px; }
+  .date-ghost {
+    display: block; flex: 0 0 72px;
+    font-size: 13px; font-weight: 500; color: var(--ink-3); white-space: nowrap;
   }
-  #campusSeg { grid-area: campus; }
-  #floorSeg { grid-area: floors; justify-self: stretch; overflow-x: auto; scrollbar-width: none; }
-  #floorSeg button { flex: 1; min-width: 30px; }
-  .plan-bar .spacer { display: none; }
-  .tools { grid-area: tools; justify-self: end; gap: 4px; }
-  .floor-title { grid-area: title; align-self: center; padding: 0 0 0 4px; }
-  .floor-n { font-size: 20px; }
-  .floor-sum, .fl-w, .sep { display: none; }
-  .seg button { padding: 5px 10px; }
-  .icon-btn { width: 32px; height: 32px; border-radius: 8px; }
-  .icon-btn svg { width: 16px; height: 16px; }
-  .compass { width: 34px; height: 34px; }
+  .date-ghost.prev { text-align: left; }
+  .date-ghost.next { text-align: right; }
+  .date-ghost.prev::before { content: "‹ "; }
+  .date-ghost.next::after { content: " ›"; }
+
+  /* План на весь блок, управление плавает поверх стеклянными колонками */
+  .plan-pane { position: relative; }
+  .plan-bar { display: contents; }
+  .plan-bar .spacer, .floor-title, #rotL, #rotR, #zoomIn, #zoomOut, #themeBtn, .sep { display: none; }
+  .nav-col {
+    display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+    position: absolute; z-index: 3; top: 8px; right: 8px;
+    max-height: calc(100% - 96px);
+  }
+  .nav-col .seg, .tools .compass {
+    background: color-mix(in srgb, var(--panel) 55%, transparent);
+    -webkit-backdrop-filter: blur(18px) saturate(180%);
+    backdrop-filter: blur(18px) saturate(180%);
+    border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 6px 20px rgba(0, 0, 0, .14);
+  }
+  .nav-col .seg { flex-direction: column; padding: 4px; gap: 2px; border-radius: 18px; }
+  .nav-col .seg button { min-width: 44px; height: 32px; padding: 0 6px; border-radius: 14px; font-size: 13px; }
+  #floorSeg { min-height: 0; overflow-y: auto; scrollbar-width: none; }
+  #floorSeg::-webkit-scrollbar { display: none; }
+  #floorSeg button { flex: none; }
+  .tools { position: absolute; z-index: 3; top: 8px; left: 8px; }
+  .compass { width: 44px; height: 44px; }
+  .compass .rot-hint { display: block; }
+  .fl-w { display: none; }
   .plan-wrap { display: flex; flex-direction: column; }
   #plan { flex: 1; min-height: 0; height: auto; }
   .legend { position: static; font-size: 11px; gap: 4px 10px; padding: 6px 12px 10px; background: none; }
@@ -759,8 +781,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 @media (max-width: 900px) and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .tabbar { box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 10px 34px rgba(0,0,0,.5); }
   :root:not([data-theme="light"]) .tab-lens { box-shadow: inset 0 1px 0 rgba(255,255,255,.1); }
+  :root:not([data-theme="light"]) .nav-col .seg, :root:not([data-theme="light"]) .tools .compass { box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 6px 20px rgba(0,0,0,.45); }
 }
 @media (max-width: 900px) {
   :root[data-theme="dark"] .tabbar { box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 10px 34px rgba(0,0,0,.5); }
   :root[data-theme="dark"] .tab-lens { box-shadow: inset 0 1px 0 rgba(255,255,255,.1); }
+  :root[data-theme="dark"] .nav-col .seg, :root[data-theme="dark"] .tools .compass { box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 6px 20px rgba(0,0,0,.45); }
 }

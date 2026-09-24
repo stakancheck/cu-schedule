@@ -34,7 +34,7 @@
     // иначе перетаскивание плана вниз сворачивает мини-апп
     if (tgAt("7.7")) tg.disableVerticalSwipes();
     if (tgAt("6.1")) tg.BackButton.onClick(() => {
-      if (state.view !== "plan" && window.matchMedia("(max-width: 900px)").matches) setView("plan");
+      if (state.view !== "plan" && isPhone()) setView("plan");
       else selectRoom(null);
     });
     // внешние ссылки открываем через Telegram, а не внутри мини-аппа
@@ -191,6 +191,9 @@
   const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
   const dowFmt = new Intl.DateTimeFormat("ru-RU", { weekday: "long" });
   const dayFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
+  const ghostFmt = new Intl.DateTimeFormat("ru-RU", { weekday: "short", day: "numeric" });
+  const OTHER_DAY_T = 10 * 60; // другой день открываем на 10:00, а не на текущем времени
+  const isPhone = () => window.matchMedia("(max-width: 900px)").matches;
 
   /* ============================================================ Состояние */
   const state = {
@@ -226,6 +229,7 @@
     }
     if (h.get("rot")) state.angle = ((+h.get("rot") % 360) + 360) % 360;
     if (h.get("t") && /^\d\d:\d\d$/.test(h.get("t"))) { state.t = toMin(h.get("t")); state.live = false; }
+    else if (state.date !== todayIso()) { state.t = OTHER_DAY_T; state.live = false; }
     if (["list", "info"].includes(h.get("v"))) state.view = h.get("v");
   })();
 
@@ -489,6 +493,8 @@
   $("rotL").onclick = () => rotateTo(state.angle - 90);
   $("rotR").onclick = () => rotateTo(state.angle + 90);
   $("compass").onclick = () => {
+    // на телефоне компас - единственная кнопка поворота, крутит по часовой
+    if (isPhone()) return rotateTo(state.angle + 90);
     const a = state.angle % 360;
     rotateTo(state.angle - (a > 180 ? a - 360 : a < -180 ? a + 360 : a));
   };
@@ -538,7 +544,7 @@
     const size = Math.max(b.width, b.height, 1);
     const zoom = Math.min(4.5, Math.max(1.6, (0.25 * Math.min(W, H)) / (size * fit)));
     // на телефоне поднимаем комнату над мини-карточкой снизу
-    const lift = window.matchMedia("(max-width: 900px)").matches ? (H / (fit * zoom)) * 0.1 : 0;
+    const lift = isPhone() ? (H / (fit * zoom)) * 0.1 : 0;
     const target = { zoom, pan: [rx - CX, ry - CY + lift] };
 
     const from = { zoom: state.zoom, pan: [...state.pan] };
@@ -697,6 +703,8 @@
     $("dow").textContent = dowFmt.format(d);
     $("dnum").textContent = dayFmt.format(d);
     $("datePick").value = state.date;
+    $("prevLbl").textContent = ghostFmt.format(parseIso(addDays(state.date, -1)));
+    $("nextLbl").textContent = ghostFmt.format(parseIso(addDays(state.date, 1)));
     const today = todayIso();
     const q = $("quickDays");
     q.innerHTML = "";
@@ -1081,7 +1089,7 @@
   // Аудитория из списка: выбрать, на телефоне открыть план, приблизить
   function pickRoom(room) {
     selectRoom(room);
-    if (window.matchMedia("(max-width: 900px)").matches) setView("plan");
+    if (isPhone()) setView("plan");
     focusRoom(room);
   }
   function selectRoom(room) {
@@ -1097,9 +1105,65 @@
   }
   function setDate(d) {
     state.date = d;
-    if (d !== todayIso() && state.live) state.live = false;
+    // сегодня показываем по живому времени, другой день с утра
+    state.live = d === todayIso();
+    state.t = state.live ? nowMin() : OTHER_DAY_T;
     renderAll();
   }
+
+  /* ---------- свайп по датам на телефоне: влево - следующий день, вправо - предыдущий */
+  const SWIPE_MIN = 56;
+  let swipedAt = 0;
+  function swipeDays(zone, targets) {
+    let s = null;
+    const move = (dx, anim) => {
+      for (const t of targets()) {
+        t.style.transition = anim ? "transform .28s cubic-bezier(.2, .8, .3, 1), opacity .28s" : "none";
+        t.style.transform = dx ? `translateX(${dx}px)` : "";
+        t.style.opacity = dx ? String(1 - Math.min(0.6, Math.abs(dx) / 260)) : "";
+      }
+    };
+    zone.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse" || !isPhone() || !targets() || e.target.closest("input[type=range], input[type=search]")) return;
+      s = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, on: false };
+    });
+    zone.addEventListener("pointermove", (e) => {
+      if (!s || e.pointerId !== s.id) return;
+      const dx = e.clientX - s.x, dy = e.clientY - s.y;
+      if (!s.on) {
+        if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { s = null; return; } // это вертикальный скролл
+        if (Math.abs(dx) < 10) return;
+        s.on = true;
+        zone.setPointerCapture(e.pointerId);
+      }
+      s.dx = dx;
+      move(dx * 0.6);
+    });
+    const end = (e) => {
+      if (!s || e.pointerId !== s.id) return;
+      const { on, dx } = s;
+      s = null;
+      if (!on) return;
+      swipedAt = performance.now();
+      if (e.type !== "pointerup" || Math.abs(dx) < SWIPE_MIN) return move(0, true);
+      const dir = dx < 0 ? 1 : -1;
+      setDate(addDays(state.date, dir));
+      if (tgAt("6.1")) tg.HapticFeedback.selectionChanged();
+      // новый день въезжает с той стороны, куда тянули
+      move(dir * 70);
+      void zone.offsetWidth;
+      move(0, true);
+    };
+    zone.addEventListener("pointerup", end);
+    zone.addEventListener("pointercancel", end);
+  }
+  // после свайпа палец отпускают над кнопкой: этот клик не нужен
+  document.addEventListener("click", (e) => {
+    if (performance.now() - swipedAt < 350) { e.stopPropagation(); e.preventDefault(); }
+  }, true);
+  const dateRow = document.querySelector(".date-row");
+  swipeDays(dateRow, () => [dateRow]);
+  swipeDays($("sideBody"), () => (state.view === "list" ? [dateRow, document.querySelector(".sched-part")] : null));
 
   $("campusSeg").addEventListener("click", (e) => {
     const b = e.target.closest("[data-campus]");

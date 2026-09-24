@@ -17,18 +17,21 @@
     <!-- ЛЕВАЯ ЧАСТЬ: план -->
     <section class="plan-pane">
       <header class="plan-bar">
-        <div class="seg" id="campusSeg" role="tablist" aria-label="Кампус">
-          <button class="on" data-campus="CT">ЦТ</button>
-          <button data-campus="DUCAT">Дукат</button>
+        <!-- на телефоне колонка поверх плана справа -->
+        <div class="nav-col">
+          <div class="seg" id="campusSeg" role="tablist" aria-label="Кампус">
+            <button class="on" data-campus="CT">ЦТ</button>
+            <button data-campus="DUCAT">Дукат</button>
+          </div>
+          <div class="seg" id="floorSeg" role="tablist" aria-label="Этаж"></div>
         </div>
-        <div class="seg" id="floorSeg" role="tablist" aria-label="Этаж"></div>
         <div class="spacer"></div>
         <div class="tools">
           <button class="icon-btn" id="rotL" title="Повернуть против часовой">
             <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v5h5"/></svg>
           </button>
           <button class="compass" id="compass" title="Север наверх">
-            <svg viewBox="-20 -20 40 40"><g id="needle"><path class="n" d="M0,-15 L5,0 L-5,0Z"/><path class="s" d="M0,15 L5,0 L-5,0Z"/></g><text id="compassN" y="-4.5" x="0">С</text></svg>
+            <svg viewBox="-20 -20 40 40"><path class="rot-hint" d="M12.7,-12.7 A18,18 0 0 1 17.4,4.7 M17.4,4.7 l-4,-2.2 M17.4,4.7 l2.2,-4"/><g id="needle"><path class="n" d="M0,-15 L5,0 L-5,0Z"/><path class="s" d="M0,15 L5,0 L-5,0Z"/></g><text id="compassN" y="-4.5" x="0">С</text></svg>
           </button>
           <button class="icon-btn" id="rotR" title="Повернуть по часовой">
             <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5"/></svg>
@@ -69,11 +72,14 @@
       <div class="side-head">
         <div class="date-row">
           <button class="icon-btn" id="prevDay" title="Предыдущий день"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <!-- на телефоне вместо стрелок: соседние дни по краям, листаются свайпом -->
+          <span class="date-ghost prev" id="prevLbl" aria-hidden="true"></span>
           <label class="date-main" title="Выбрать дату">
             <span class="dow" id="dow"></span>
             <span class="dnum" id="dnum"></span>
             <input type="date" id="datePick">
           </label>
+          <span class="date-ghost next" id="nextLbl" aria-hidden="true"></span>
           <button class="icon-btn" id="nextDay" title="Следующий день"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
         </div>
         <div class="quick-days" id="quickDays"></div>
