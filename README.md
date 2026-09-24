@@ -31,12 +31,14 @@ python3 scripts/update.py
 python3 scripts/build_db.py raspisanie-spiskom.xlsx
 ```
 
-## Обновить план Дуката
+## Обновить планы кампусов
 
-План парсится из PDF (векторы стен и иконок, контуры аудиторий через сегментацию):
+Планы обоих кампусов парсятся из официальных PDF (векторы стен, иконок и улиц, контуры
+аудиторий через сегментацию):
 
 ```bash
-python3 scripts/parse_ducat.py ~/Downloads/plan-ducat.pdf
+python3 scripts/parse_plan.py ct ~/Downloads/ЦТ_план.pdf
+python3 scripts/parse_plan.py ducat ~/Downloads/plan-ducat.pdf
 ```
 
 Нужны `pymupdf`, `opencv-python`, `numpy`.
@@ -48,9 +50,8 @@ python3 scripts/parse_ducat.py ~/Downloads/plan-ducat.pdf
 - `data/schedule.csv` - полная база: одна строка на занятие, аудитории через `;`, дубли из исходника убраны.
 - `data/rooms.csv` - справочник аудиторий (кампус, этаж, число занятий).
 - `data/schedule.js` - компактная база для приложения.
-- `js/plans.js` - геометрия этажей ЦТ (координаты сняты со скриншотов планов).
-- `scripts/parse_ducat.py` - парсер PDF-плана Дуката.
-- `js/plans-ducat.js` - сгенерированная геометрия 10 этажей Дуката, руками не править.
+- `scripts/parse_plan.py` - парсер PDF-планов кампусов.
+- `js/plans-ct.js`, `js/plans-ducat.js` - сгенерированная геометрия этажей ЦТ и Дуката, руками не править.
 - `js/app.js`, `css/app.css`, `index.html` - интерфейс.
 - `js/account.js`, `js/config.js`, `worker/` - личное расписание из Яндекс Календаря (см. ниже).
 

@@ -31,8 +31,15 @@
   function initTelegram() {
     if (!inTg) return;
     document.documentElement.classList.add("tma");
-    tg.ready();
+    // Всегда на всю высоту (fullsize). Часть клиентов игнорирует expand(),
+    // пока окно не показано, поэтому повторяем, пока Telegram не подтвердит.
+    const expand = () => { if (!tg.isExpanded) tg.expand(); };
     tg.expand();
+    tg.ready();
+    [150, 500, 1200].forEach((ms) => setTimeout(expand, ms));
+    tg.onEvent("viewportChanged", (e) => { if (!e || e.isStateStable) expand(); });
+    if (tgAt("8.0")) tg.onEvent("activated", expand);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) expand(); });
     // иначе перетаскивание плана вниз сворачивает мини-апп
     if (tgAt("7.7")) tg.disableVerticalSwipes();
     if (tgAt("6.1")) tg.BackButton.onClick(() => {
@@ -63,7 +70,7 @@
   const S = window.SCHEDULE;
   const str = S.strings;
 
-  // Аудитории с расписанием: в ЦТ это class-комнаты, в Дукате - помещения
+  // Аудитории с расписанием: class-комнаты (в ЦТ все учебные) и помещения
   // из PDF-плана, которые встречаются в расписании. Коды уникальны между кампусами.
   const scheduled = new Set();
   for (const row of S.events) for (const i of row[7]) scheduled.add(str[i]);
@@ -75,7 +82,7 @@
         if (isClass) { roomFloor[r.id] = f.n; roomCampus[r.id] = c.id; }
       }
     }
-    // рамка кампуса: у ЦТ задана, у Дуката собираем из рамок этажей
+    // рамка кампуса: у ЦТ задана парсером (с улицами), у Дуката собираем из рамок этажей
     if (!c.extent) {
       const e = Object.values(c.floors).map((f) => f.extent);
       const x0 = Math.min(...e.map((v) => v[0])), y0 = Math.min(...e.map((v) => v[1]));
@@ -287,112 +294,50 @@
     return g;
   }
 
-  const ICONS = {
-    stairs: "M-7,6 h4 v-4 h4 v-4 h4 v-4 h2",
-    lift: "M-5,-2 L0,-8 L5,-2 Z M-5,2 L0,8 L5,2 Z",
-    vending: "M-5,-7 h10 v14 h-10 Z M-2,-3 h4 M-2,1 h4",
-    cafe: "M-6,-3 h10 v5 a5,5 0 0 1 -10,0 Z M4,-1 h2 a2,2 0 0 1 0,4 h-2",
-    wardrobe: "M0,-6 a2,2 0 1 1 2,2 v2 L8,4 H-8 L-2,-2",
-  };
-  function poi(parent, p) {
-    if (p.kind === "tag") {
-      const g = upright(parent, p.x, p.y);
-      tag(g, p.text, { size: 13, cls: "tag-mini" });
-      return;
-    }
-    const g = upright(parent, p.x, p.y);
-    g.setAttribute("class", "poi " + p.kind);
-    el("rect", { x: -14, y: -14, width: 28, height: 28, rx: 3 }, g);
-    if (ICONS[p.kind]) el("path", { d: ICONS[p.kind] }, g);
-    else if (p.kind === "info") { el("circle", { class: "ic", r: 8 }, g); el("text", { y: 1, "font-size": 12 }, g).textContent = "i"; }
-    else {
-      const txt = { wcm: "М", wcf: "Ж", access: "♿︎" }[p.kind] || "?";
-      el("text", { y: 1 }, g).textContent = txt;
-    }
-  }
-
   function buildPlan() {
     const floor = campus.floors[state.floor];
     svg.innerHTML = "";
     labels = []; streetLabels = []; roomEls = {}; roomLabelEls = {};
 
-    const defs = el("defs", {}, svg);
-    const pat = el("pattern", { id: "hatch", width: 10, height: 10, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, defs);
-    el("rect", { width: 10, height: 10, fill: "var(--floor)" }, pat);
-    el("rect", { width: 4, height: 10, fill: "var(--wip)", opacity: .35 }, pat);
-
     world = el("g", {}, svg);
-    if (floor.floorPaths) { buildVectorFloor(floor); applyTransform(); paintRooms(); return; }
-
-    // Улицы (в базовых координатах)
-    for (const line of campus.streets.lines) el("polyline", { class: "street-line", points: ptsAttr(line) }, world);
-    for (const s of campus.streets.labels) {
-      const g = el("g", {}, world);
-      const t = el("text", { class: "street-lbl" }, g);
-      t.textContent = s.text;
-      streetLabels.push({ g, ...s });
-    }
-    const m = campus.streets.metro;
-    el("path", { class: "metro-arrow", d: `M${m.x},${m.y - 30} v38 m-9,-10 l9,10 l9,-10` }, world);
-    const mg = upright(world, m.x, m.y + 40);
-    m.text.forEach((line, i) => { el("text", { class: "metro-lbl", y: i * 26 }, mg).textContent = line; });
-
-    // Этаж
-    const fg = el("g", { transform: `translate(${floor.offset[0]},${floor.offset[1]})` }, world);
-    el("path", { class: "b-outline", d: floor.outline }, fg);
-
-    const roomsG = el("g", { class: "rooms" + (state.room ? " has-sel" : "") }, fg);
-    for (const r of floor.rooms) {
-      if (r.kind === "class") continue;
-      el("polygon", { class: "r " + r.kind, points: ptsAttr(r.pts) }, roomsG);
-    }
-    for (const w of floor.walls) el("polyline", { class: "b-wall", points: ptsAttr(w) }, fg);
-    el("polygon", { class: "b-atrium", points: ptsAttr(floor.atrium) }, fg);
-
-    // Учебные аудитории поверх стен, чтобы кликались целиком
-    const classG = el("g", { class: "rooms" + (state.room ? " has-sel" : "") }, fg);
-    for (const r of floor.rooms) {
-      if (r.kind !== "class") continue;
-      const poly = el("polygon", { class: "r class", points: ptsAttr(r.pts), "data-room": r.id }, classG);
-      roomEls[r.id] = poly;
-    }
-
-    // Атриум
-    const [ax, ay] = centroid(floor.atrium);
-    tag(upright(fg, ax, ay), "Атриум", { size: 20, cls: "atrium-lbl", padX: 14 });
-
-    // POI
-    const poiG = el("g", {}, fg);
-    for (const p of floor.pois) poi(poiG, p);
-
-    // Подписи помещений
-    for (const r of floor.rooms) {
-      if (r.kind === "class") {
-        roomLabel(fg, r, r.labelAt || centroid(r.pts));
-      } else if (r.label && r.kind !== "service" || r.tag) {
-        if (!r.label) continue;
-        const [cx, cy] = r.tag || centroid(r.pts);
-        const g = upright(fg, cx, cy);
-        const k = r.tagKind === "dark" ? "" : ({ kitchen: "tag-kitchen", staff: "tag-staff", wip: "tag-wip" }[r.kind] || "");
-        const tagEl = tag(g, r.label, { size: 13, cls: k });
-        if (r.vertical) tagEl.setAttribute("transform", "rotate(-90)");
-        tagEl.style.pointerEvents = "none";
-      }
-    }
-
+    buildVectorFloor(floor);
     applyTransform();
     paintRooms();
   }
 
-  /* ---------- этаж из PDF (Дукат): готовые векторы стен, иконок и подписей */
-  const TAG_CLS = { kitchen: "tag-kitchen", staff: "tag-staff", fitness: "tag-fitness", closed: "tag-closed", health: "tag-health" };
+  /* ---------- этаж из PDF: готовые векторы стен, иконок и подписей */
+  const TAG_CLS = { kitchen: "tag-kitchen", staff: "tag-staff", fitness: "tag-fitness", closed: "tag-closed", health: "tag-health", wip: "tag-wip" };
   const ROOM_FILL = { kitchen: "kitchen", staff: "staff", fitness: "fitness", closed: "closed", health: "health" };
-  const isCowork = (r) => /Коворкинг/.test(r.label || r.text || "") && !/сотрудник/.test(r.label || r.text || "");
+  const isCowork = (r) => /Коворкинг|Опенспейс/.test(r.label || r.text || "") && !/сотрудник/.test(r.label || r.text || "");
   const short = (t, n = 26) => (t.length > n ? t.slice(0, n - 1).trimEnd() + "…" : t);
+
+  // Серые подписи: вдоль улицы или стрелки (при повороте плана не встают
+  // вверх ногами) либо блоком строк, который всегда стоит вертикально
+  function streetText(parent, s) {
+    if (s.lines) {
+      const g = upright(parent, s.x, s.y);
+      for (const l of s.lines) {
+        const t = el("text", { class: "street-lbl", x: l.dx, y: l.dy }, g);
+        t.style.fontSize = s.size + "px";
+        t.style.textAnchor = "start";
+        t.textContent = l.text;
+      }
+      return;
+    }
+    const g = el("g", {}, parent);
+    const t = el("text", { class: "street-lbl" }, g);
+    t.style.fontSize = s.size + "px";
+    t.textContent = s.text;
+    streetLabels.push({ g, ...s });
+  }
 
   function buildVectorFloor(floor) {
     const fg = el("g", {}, world);
     const eo = (p) => (p.eo ? "evenodd" : "nonzero");
+    if (campus.streets) {
+      for (const p of campus.streets.paths) el("path", { class: "v-street", d: p.d, "fill-rule": eo(p) }, fg);
+      for (const s of campus.streets.texts) streetText(fg, s);
+    }
     for (const p of floor.floorPaths) el("path", { class: "v-floor", d: p.d, "fill-rule": eo(p) }, fg);
 
     const roomsG = el("g", { class: "rooms" }, fg);
@@ -410,6 +355,9 @@
       roomEls[r.id] = el("polygon", { class: "r v class", points: ptsAttr(r.pts), "data-room": r.id }, classG);
     }
 
+    for (const p of floor.decorPaths || []) el("path", { class: "v-street", d: p.d, "fill-rule": eo(p) }, fg);
+    for (const s of floor.decorTexts || []) streetText(fg, s);
+
     for (const ic of floor.icons) {
       const g = upright(fg, ic.x, ic.y);
       g.setAttribute("class", "vicon");
@@ -417,7 +365,9 @@
     }
 
     for (const l of floor.labels) {
-      const g = upright(fg, l.x, l.y);
+      // вертикальная плашка поворачивается вместе с планом, как подпись улицы
+      const g = l.vertical ? el("g", {}, fg) : upright(fg, l.x, l.y);
+      if (l.vertical) streetLabels.push({ g, x: l.x, y: l.y, angle: -90 });
       const cls = isCowork(l) ? "tag-open" : TAG_CLS[l.color] || "";
       tag(g, l.text, { size: l.big ? 30 : 12, cls, padX: l.big ? 14 : 7 }).style.pointerEvents = "none";
     }
@@ -463,7 +413,7 @@
     for (const l of labels) l.g.setAttribute("transform", `translate(${l.x},${l.y}) rotate(${-a})`);
     for (const s of streetLabels) {
       let v = ((s.angle + a) % 360 + 360) % 360;
-      if (v > 90 && v <= 270) v -= 180;
+      if (v >= 90 && v < 270) v -= 180; // вертикальные читаются снизу вверх, как в PDF
       s.g.setAttribute("transform", `translate(${s.x},${s.y}) rotate(${v - a})`);
     }
     // рамка по повернутому extent
@@ -527,10 +477,9 @@
     const r = floor && floor.rooms.find((x) => x.id === room);
     if (!r || !r.pts || !r.pts.length) return;
     // габариты берём из данных: у скрытого плана (вкладка списка) getBBox вернёт нули
-    const off = floor.floorPaths ? [0, 0] : floor.offset;
     const xs = r.pts.map((p) => p[0]), ys = r.pts.map((p) => p[1]);
     const b = { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
-    const x = b.x + b.width / 2 + off[0], y = b.y + b.height / 2 + off[1];
+    const x = b.x + b.width / 2, y = b.y + b.height / 2;
     const rad = (state.angle * Math.PI) / 180, c = Math.cos(rad), s = Math.sin(rad);
     const rx = CX + (x - CX) * c - (y - CY) * s, ry = CY + (x - CX) * s + (y - CY) * c;
 
@@ -664,6 +613,33 @@
 
   /* ============================================================ Правая колонка */
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  /* ---------- анимированные переключатели: подложка переезжает под выбранную кнопку */
+  const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function syncThumbs() {
+    for (const seg of document.querySelectorAll(".seg")) {
+      let th = seg.querySelector(":scope > .seg-thumb");
+      const fresh = !th;
+      if (fresh) { th = document.createElement("span"); th.className = "seg-thumb"; seg.prepend(th); }
+      const on = seg.querySelector(":scope > button.on");
+      if (!on || !on.offsetWidth) { th.style.opacity = "0"; continue; } // вкладка скрыта
+      const r = { x: on.offsetLeft, y: on.offsetTop, w: on.offsetWidth, h: on.offsetHeight };
+      const place = (p) => {
+        th.style.width = p.w + "px"; th.style.height = p.h + "px";
+        th.style.transform = `translate(${p.x}px, ${p.y}px)`;
+      };
+      // кнопки этажей перерисовываются целиком: новая подложка стартует с прошлого места
+      const animate = !!seg._thumb && (fresh || th.style.opacity === "1") && !reduceMotion();
+      th.style.transition = "none";
+      if (animate && fresh) place(seg._thumb);
+      th.style.borderRadius = getComputedStyle(on).borderRadius;
+      th.style.opacity = "1";
+      void th.offsetWidth;
+      if (animate) th.style.transition = "";
+      place(r);
+      seg._thumb = r;
+    }
+  }
 
   function renderFloorSeg() {
     const seg = $("floorSeg");
@@ -1042,6 +1018,7 @@
   function renderSide() {
     renderHead(); renderMode(); renderRoomCard();
     if (state.mine) renderMine(); else { renderFree(); renderEvents(); }
+    syncThumbs();
   }
   function renderAll() { renderFloorSeg(); paintRooms(); renderSide(); writeHash(); syncTgBackButton(); }
 
@@ -1070,6 +1047,7 @@
     }
     writeHash();
     syncTgBackButton();
+    syncThumbs();
   }
   $("tabbar").addEventListener("click", (e) => {
     const b = e.target.closest("[data-view]");
@@ -1187,6 +1165,7 @@
     if (!b) return;
     state.scope = b.dataset.scope;
     $("scopeSeg").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+    syncThumbs();
     renderEvents();
   });
   $("search").oninput = (e) => { state.query = e.target.value; renderEvents(); };
@@ -1211,7 +1190,9 @@
     }
   }, 20000);
 
-  window.addEventListener("resize", applyTransform);
+  window.addEventListener("resize", () => { applyTransform(); syncThumbs(); });
+  // ширина кнопок меняется, когда догрузится шрифт
+  if (document.fonts) document.fonts.ready.then(syncThumbs);
 
   // Тема: как в системе -> светлая -> тёмная
   const THEMES = { auto: "как в системе", light: "светлая", dark: "тёмная" };

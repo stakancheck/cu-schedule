@@ -198,6 +198,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .spacer { flex: 1; }
 
 .seg {
+  position: relative;
   display: inline-flex;
   background: var(--chip);
   border-radius: var(--radius-s);
@@ -213,7 +214,14 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   color: var(--ink-2);
 }
 .seg button:hover:not(.on):not(:disabled) { color: var(--ink); }
-.seg button.on { background: var(--ink); color: var(--panel); }
+.seg button { position: relative; z-index: 1; transition: color .25s; }
+.seg button.on { color: var(--panel); }
+/* подложка выбранной кнопки, двигает её syncThumbs */
+.seg-thumb {
+  position: absolute; left: 0; top: 0; z-index: 0;
+  background: var(--ink); pointer-events: none; opacity: 0;
+  transition: transform .38s cubic-bezier(.3, 1.25, .5, 1), width .38s cubic-bezier(.3, 1.25, .5, 1), height .38s cubic-bezier(.3, 1.25, .5, 1);
+}
 .seg.many .fl-w { display: none; }
 .seg.many button { padding: 6px 10px; }
 .seg.small button { padding: 4px 10px; font-size: 12px; }
@@ -306,23 +314,15 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .tooltip b { font-size: 14px; }
 
 /* SVG-слои плана */
-.street-line { fill: none; stroke: var(--ink-3); stroke-width: 2; stroke-dasharray: 8 7; opacity: .7; }
+.v-street { fill: var(--ink-3); opacity: .7; }
 .street-lbl { font-size: 26px; font-weight: 600; fill: var(--ink-3); text-anchor: middle; dominant-baseline: middle; }
-.metro-lbl { font-size: 22px; font-weight: 600; fill: var(--ink-3); text-anchor: middle; }
-.metro-arrow { stroke: var(--ink-3); stroke-width: 3; fill: none; }
-
-.b-outline { fill: var(--floor); stroke: var(--wall); stroke-width: 4; stroke-linejoin: round; }
-.b-atrium { fill: var(--atrium); stroke: var(--wall); stroke-width: 3.5; stroke-linejoin: round; }
-.b-wall { fill: none; stroke: var(--wall); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: .85; }
 
 .r { stroke: var(--wall); stroke-width: 2.2; stroke-linejoin: round; }
-.r.service { fill: transparent; stroke: none; }
 .r.open { fill: var(--open); stroke: none; }
 .r.kitchen { fill: var(--kitchen); }
 .r.staff { fill: var(--staff); }
-.r.wip { fill: url(#hatch); stroke: none; }
 
-/* Этажи из PDF (Дукат) */
+/* Этажи из PDF */
 .v-floor { fill: var(--floor); }
 .v-wall { fill: var(--wall); }
 .v-void { fill: var(--atrium); }
@@ -364,7 +364,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .tag-staff .tagbox { fill: var(--staff-tag); }
 .tag-wip .tagbox { fill: var(--wip); }
 .tag-wip .tagtxt { fill: #0f3033; }
-.tag-mini .tagbox { fill: var(--tag); }
 
 .room-lbl { pointer-events: none; }
 .room-lbl .code { font-size: 18px; font-weight: 600; }
@@ -373,14 +372,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .room-lbl .dot-soon { fill: var(--soon-ink); }
 .room-lbl .dot-busy { fill: var(--busy-ink); }
 
-.poi rect { fill: var(--tag); }
-.poi.vending rect, .poi.cafe rect { fill: var(--kitchen-tag); }
-.poi path, .poi circle.ic { fill: none; stroke: var(--tag-ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.poi text { fill: var(--tag-ink); font-size: 14px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
-.poi.vending path, .poi.cafe path { stroke: #fff; }
 
-.atrium-lbl .tagbox { fill: var(--tag); }
-.atrium-lbl .tagtxt { font-size: 20px; font-weight: 600; }
 
 /* ------------------------------------------------------------ Правая колонка */
 .side {
@@ -662,7 +654,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   /* Вкладка «План»: дата и время сверху, план на остаток экрана */
   .app[data-view="plan"] .side { flex: none; }
   .app[data-view="plan"] .side-body { display: none; }
-  .app[data-view="plan"] .side-head { padding: 10px 12px; }
   /* план до низа экрана, меню плавает над ним; легенда остаётся над меню */
   .app[data-view="plan"] .plan-pane { flex: 1; min-height: 0; }
   .app:not([data-view="plan"]) .plan-pane { display: none; }
@@ -675,7 +666,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .app[data-view="info"] .credits { margin-top: 18px; }
 
   .date-main .dnum { font-size: 20px; }
-  .side-head { padding: 12px; }
+  .side-head { padding: 10px 12px; } /* одинаково на всех вкладках, иначе шапка скачет */
   .ev.now::before { left: -12px; }
   .toast { bottom: calc(var(--tabbar-h) + 22px + var(--safe-bottom)); width: max-content; }
 
