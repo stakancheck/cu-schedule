@@ -501,16 +501,62 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .empty { padding: 28px 8px; text-align: center; color: var(--ink-3); }
 
 
+/* ------------------------------------------------------------ Полезное */
+.useful { margin-top: 22px; display: grid; gap: 8px; }
+.link-card {
+  display: grid; grid-template-columns: 36px 1fr auto; align-items: center; gap: 12px;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius);
+  color: var(--ink); text-decoration: none; transition: border-color .2s, background .2s;
+}
+.link-card:hover { border-color: var(--ink-3); background: var(--chip); }
+.lc-ic { width: 36px; height: 36px; border-radius: var(--radius-s); display: grid; place-items: center; }
+.lc-ic svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.lc-violet { background: var(--accent-soft); color: var(--accent-ink); }
+.lc-cyan { background: color-mix(in srgb, var(--b-sem) 16%, transparent); color: var(--b-sem); }
+.lc-green { background: color-mix(in srgb, var(--kitchen-tag) 16%, transparent); color: var(--kitchen-tag); }
+.lc-orange { background: color-mix(in srgb, var(--b-ctrl) 16%, transparent); color: var(--b-ctrl); }
+.lc-text { display: flex; flex-direction: column; min-width: 0; }
+.lc-text b { font-weight: 500; }
+.lc-text small { color: var(--ink-3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lc-arrow { color: var(--ink-3); font-size: 16px; }
+
+/* Мобильные элементы на десктопе скрыты */
+.tabbar, .room-peek { display: none; }
+
 /* ------------------------------------------------------------ Мобилка */
 @media (max-width: 900px) {
+  :root { --tabbar-h: 64px; }
+  html, body { height: 100%; overflow: hidden; }
+  /* Экран = одна вкладка, прокрутка внутри вкладки, меню плавает поверх */
   .app {
-    grid-template-columns: 1fr; grid-template-rows: auto auto;
-    height: auto; min-height: 100vh; min-height: var(--app-h);
-    padding: calc(8px + var(--safe-top)) calc(8px + var(--safe-right)) calc(8px + var(--safe-bottom)) calc(8px + var(--safe-left));
+    display: flex; flex-direction: column;
+    height: var(--app-h);
+    padding: calc(8px + var(--safe-top)) calc(8px + var(--safe-right)) 0 calc(8px + var(--safe-left));
     gap: 8px;
   }
-  .side { overflow: visible; }
-  .side-body { overflow: visible; }
+  .side { order: -1; flex: 1; min-height: 0; }
+  .side-body { overflow: auto; padding-bottom: calc(var(--tabbar-h) + 28px + var(--safe-bottom)); -webkit-overflow-scrolling: touch; }
+
+  /* Вкладка «План»: дата и время сверху, план на остаток экрана */
+  .app[data-view="plan"] .side { flex: none; }
+  .app[data-view="plan"] .side-body { display: none; }
+  .app[data-view="plan"] .side-head { border-bottom: 0; padding: 10px 12px; }
+  .app[data-view="plan"] .quick-days { display: none; }
+  .app[data-view="plan"] .plan-pane { flex: 1; min-height: 0; margin-bottom: calc(var(--tabbar-h) + 18px + var(--safe-bottom)); }
+  .app:not([data-view="plan"]) .plan-pane { display: none; }
+
+  /* Вкладка «Расписание» */
+  .app[data-view="list"] .useful { display: none; }
+  /* Вкладка «Полезное» */
+  .app[data-view="info"] .side-head, .app[data-view="info"] .sched-part { display: none; }
+  .app[data-view="info"] .useful { margin-top: 0; }
+  .app[data-view="info"] .credits { margin-top: 18px; }
+
+  .date-main .dnum { font-size: 20px; }
+  .side-head { padding: 12px; }
+  .side-body { padding: 12px 12px 0; }
+  .ev.now::before { left: -12px; }
+
   /* Панель плана: [кампус][этажи] / [Этаж N ... инструменты] */
   .plan-bar {
     display: grid;
@@ -529,10 +575,79 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .floor-sum, .fl-w, .sep { display: none; }
   .seg button { padding: 5px 10px; }
   .icon-btn { width: 32px; height: 32px; border-radius: 8px; }
-  #themeBtn .ic { display: none; }
-#themeBtn[data-mode="auto"] .ic-auto, #themeBtn[data-mode="light"] .ic-light, #themeBtn[data-mode="dark"] .ic-dark { display: block; }
-.icon-btn svg { width: 16px; height: 16px; }
+  .icon-btn svg { width: 16px; height: 16px; }
   .compass { width: 34px; height: 34px; }
-  #plan { height: auto; aspect-ratio: 1.1; }
-  .legend { position: static; font-size: 11px; gap: 4px 10px; padding: 8px 14px 12px; background: none; }
+  .plan-wrap { display: flex; flex-direction: column; }
+  #plan { flex: 1; min-height: 0; height: auto; }
+  .legend { position: static; font-size: 11px; gap: 4px 10px; padding: 6px 12px 10px; background: none; }
+
+  /* Мини-карточка выбранной аудитории поверх плана */
+  .room-peek:not([hidden]) {
+    display: flex; align-items: center; gap: 10px;
+    position: absolute; left: 10px; right: 10px; bottom: 44px;
+    padding: 10px 10px 10px 14px;
+    background: var(--panel); border: 1px solid var(--accent); border-radius: var(--radius);
+    box-shadow: 0 10px 30px rgba(0,0,0,.18);
+    animation: peek-in .25s cubic-bezier(.2, 0, .3, 1);
+  }
+  .room-peek .pk-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .room-peek .pk-main b { font-size: 20px; font-weight: 600; line-height: 1; }
+  .room-peek .status-pill { margin: 0; align-self: flex-start; }
+  .room-peek .pk-go {
+    border: 0; background: var(--accent); color: #fff; border-radius: var(--radius-s);
+    padding: 9px 12px; font-weight: 500; font-size: 13px;
+  }
+  .room-peek .pk-x { border: 0; background: transparent; color: var(--ink-3); font-size: 22px; line-height: 1; padding: 4px 6px; }
+
+  /* ---------- нижнее меню, «жидкое стекло» */
+  .tabbar {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    position: fixed; z-index: 20;
+    left: 50%; transform: translateX(-50%);
+    bottom: calc(10px + var(--safe-bottom));
+    width: min(360px, calc(100% - 32px - var(--safe-left) - var(--safe-right)));
+    height: var(--tabbar-h);
+    padding: 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--panel) 58%, transparent);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    backdrop-filter: blur(22px) saturate(180%);
+    border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .45),
+      inset 0 -1px 0 rgba(255, 255, 255, .08),
+      0 10px 34px rgba(0, 0, 0, .18);
+  }
+  .tabbar button {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    border: 0; background: transparent; color: var(--ink-2);
+    font-size: 11px; font-weight: 500; border-radius: 999px;
+    transition: color .25s, transform .15s;
+  }
+  .tabbar button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .tabbar button.on { color: var(--accent-ink); }
+  .tabbar button:active { transform: scale(.94); }
+  /* «Линза» под активной вкладкой: перетекает с лёгким растяжением */
+  .tab-lens {
+    position: absolute; z-index: 0; top: 6px; bottom: 6px; left: 6px;
+    width: calc((100% - 12px) / 3);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--ink) 9%, transparent);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 0 0 1px color-mix(in srgb, var(--ink) 6%, transparent);
+    transition: transform .45s cubic-bezier(.3, 1.4, .5, 1);
+  }
+  .tab-lens.stretch { animation: lens-stretch .45s ease; }
+}
+@keyframes peek-in { from { opacity: 0; transform: translateY(10px); } }
+@keyframes lens-stretch { 40% { scale: 1.18 .92; } }
+
+/* В тёмной теме белые блики стекла приглушаем */
+@media (max-width: 900px) and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .tabbar { box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 10px 34px rgba(0,0,0,.5); }
+  :root:not([data-theme="light"]) .tab-lens { box-shadow: inset 0 1px 0 rgba(255,255,255,.1); }
+}
+@media (max-width: 900px) {
+  :root[data-theme="dark"] .tabbar { box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 10px 34px rgba(0,0,0,.5); }
+  :root[data-theme="dark"] .tab-lens { box-shadow: inset 0 1px 0 rgba(255,255,255,.1); }
 }

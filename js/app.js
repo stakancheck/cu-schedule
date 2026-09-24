@@ -33,7 +33,10 @@
     tg.expand();
     // иначе перетаскивание плана вниз сворачивает мини-апп
     if (tgAt("7.7")) tg.disableVerticalSwipes();
-    if (tgAt("6.1")) tg.BackButton.onClick(() => selectRoom(null));
+    if (tgAt("6.1")) tg.BackButton.onClick(() => {
+      if (state.view !== "plan" && window.matchMedia("(max-width: 900px)").matches) setView("plan");
+      else selectRoom(null);
+    });
     // внешние ссылки открываем через Telegram, а не внутри мини-аппа
     document.addEventListener("click", (e) => {
       const a = e.target.closest && e.target.closest('a[target="_blank"]');
@@ -47,7 +50,8 @@
 
   function syncTgBackButton() {
     if (!tgAt("6.1")) return;
-    if (state.room) tg.BackButton.show(); else tg.BackButton.hide();
+    const offPlan = state.view !== "plan" && window.matchMedia("(max-width: 900px)").matches;
+    if (state.room || offPlan) tg.BackButton.show(); else tg.BackButton.hide();
   }
 
   /* ============================================================ Данные */
@@ -175,6 +179,7 @@
     scope: "all",
     query: "",
     showPast: false,
+    view: "plan",   // вкладка мобильной версии: plan | list | info
   };
 
   (function readHash() {
@@ -189,6 +194,7 @@
     }
     if (h.get("rot")) state.angle = ((+h.get("rot") % 360) + 360) % 360;
     if (h.get("t") && /^\d\d:\d\d$/.test(h.get("t"))) { state.t = toMin(h.get("t")); state.live = false; }
+    if (["list", "info"].includes(h.get("v"))) state.view = h.get("v");
   })();
 
   function writeHash() {
@@ -199,6 +205,7 @@
     if (!state.live) h.set("t", fmt(state.t));
     if (state.room) h.set("r", state.room);
     if (state.angle) h.set("rot", ((state.angle % 360) + 360) % 360);
+    if (state.view !== "plan") h.set("v", state.view);
     history.replaceState(null, "", "#" + h.toString());
   }
 
@@ -616,7 +623,22 @@
     $("nowBtn").classList.toggle("on", state.live);
   }
 
+  function renderPeek() {
+    const peek = $("roomPeek");
+    peek.hidden = !state.room;
+    if (!state.room) { peek.innerHTML = ""; return; }
+    const st = roomStatus(state.room, state.date, state.t);
+    const text = st.st === "busy" ? `Занята до ${fmt(st.until)}` : st.until ? `Свободна до ${fmt(st.until)}` : "Свободна до конца дня";
+    peek.innerHTML = `
+      <div class="pk-main"><b>${state.room}</b><span class="status-pill ${st.st}">${text}</span></div>
+      <button class="pk-go" data-go="list">Пары →</button>
+      <button class="pk-x" title="Сбросить выбор">×</button>`;
+    peek.querySelector(".pk-go").onclick = () => setView("list");
+    peek.querySelector(".pk-x").onclick = () => selectRoom(null);
+  }
+
   function renderRoomCard() {
+    renderPeek();
     const box = $("roomCard");
     if (!state.room) { box.innerHTML = ""; return; }
     const room = state.room, st = roomStatus(room, state.date, state.t);
@@ -734,6 +756,29 @@
     buildPlan();
     renderAll();
   }
+  /* ---------- вкладки мобильной версии */
+  const VIEWS = ["plan", "list", "info"];
+  function setView(v, { silent } = {}) {
+    if (!VIEWS.includes(v)) return;
+    const changed = v !== state.view;
+    state.view = v;
+    $("app").dataset.view = v;
+    $("tabbar").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.view === v));
+    const lens = $("tabLens");
+    lens.style.transform = `translateX(${VIEWS.indexOf(v) * 100}%)`;
+    if (changed && !silent) {
+      lens.classList.remove("stretch"); void lens.offsetWidth; lens.classList.add("stretch");
+      if (tgAt("6.1")) tg.HapticFeedback.selectionChanged();
+      $("sideBody").scrollTop = 0;
+    }
+    writeHash();
+    syncTgBackButton();
+  }
+  $("tabbar").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-view]");
+    if (b) setView(b.dataset.view);
+  });
+
   const lastFloor = {};
   function setCampus(id) {
     if (id === state.campus || !CAMPUSES[id]) return;
@@ -834,5 +879,6 @@
 
   initTelegram();
   buildPlan();
+  setView(state.view, { silent: true });
   renderAll();
 })();
