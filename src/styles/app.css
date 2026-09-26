@@ -226,8 +226,6 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .seg.many button { padding: 6px 10px; }
 .seg.small button { padding: 4px 10px; font-size: 12px; }
 
-.tools { display: flex; align-items: center; gap: 6px; }
-.sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
 .icon-btn {
   width: 34px; height: 34px;
   display: grid; place-items: center;
@@ -271,12 +269,50 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 #plan.dragging { cursor: grabbing; }
 
 .floor-title {
-  flex-basis: 100%;
+  flex-basis: 100%; min-width: 0;
   display: flex; align-items: baseline; gap: 12px;
   padding-top: 4px;
 }
 .floor-n { font-size: 26px; font-weight: 600; letter-spacing: 0; line-height: 1; white-space: nowrap; }
-.floor-sum { color: var(--ink-2); font-size: 12px; }
+.floor-sum { flex: 1; min-width: 0; color: var(--ink-2); font-size: 12px; }
+
+/* Бегущая строка: только когда текст не влезает, туда-обратно с паузами по краям */
+.marquee { overflow: hidden; white-space: nowrap; }
+.marquee > span { display: inline-block; }
+.marquee.run {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 12px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 12px), transparent);
+}
+.marquee.run > span { padding: 0 12px; margin-left: -12px; animation: marquee var(--dur, 8s) ease-in-out infinite alternate; }
+.marquee.run:hover > span { animation-play-state: paused; }
+@keyframes marquee { 0%, 15% { transform: translateX(0); } 85%, 100% { transform: translateX(var(--shift)); } }
+@media (prefers-reduced-motion: reduce) {
+  .marquee.run > span { animation: none; }
+  .marquee.run { text-overflow: ellipsis; }
+}
+
+/* Управление картой поверх плана: компас и масштаб в правом верхнем углу */
+.map-ctl {
+  position: absolute; z-index: 4; top: 12px; right: 12px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.map-ctl .compass, .zoom-ctl {
+  background: color-mix(in srgb, var(--panel) 72%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: blur(18px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .12);
+}
+.map-ctl .compass:hover { border-color: var(--ink-3); }
+.zoom-ctl { display: flex; flex-direction: column; border-radius: 999px; padding: 3px; }
+.zoom-ctl button {
+  width: 34px; height: 34px; display: grid; place-items: center;
+  border: 0; border-radius: 50%; padding: 0; background: transparent; color: var(--ink);
+  transition: background .2s, transform .15s;
+}
+.zoom-ctl button:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.zoom-ctl button:active { transform: scale(.92); }
+.zoom-ctl svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 /* Занятость: пилюля с живым временем, по нажатию остров с датой, временем и легендой */
 .time-pill, .time-island {
@@ -1269,12 +1305,12 @@ button.join { background: transparent; }
   /* План на весь блок, управление плавает поверх стеклянными колонками */
   .plan-pane { position: relative; }
   .plan-bar { display: contents; }
-  .plan-bar .spacer, .floor-title, #rotL, #rotR, #zoomIn, #zoomOut, #themeBtn, .sep { display: none; }
+  .plan-bar .spacer, .floor-title, #themeBtn { display: none; }
   .nav-col {
     display: flex; align-items: flex-start; gap: 8px;
     position: absolute; z-index: 3; top: 8px; left: 8px; right: 8px;
   }
-  .nav-col .seg, .tools .compass {
+  .nav-col .seg, .map-ctl .compass, .zoom-ctl {
     background: color-mix(in srgb, var(--panel) 55%, transparent);
     -webkit-backdrop-filter: blur(18px) saturate(180%);
     backdrop-filter: blur(18px) saturate(180%);
@@ -1287,10 +1323,15 @@ button.join { background: transparent; }
   .nav-col .floor-seg { flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
   .nav-col .floor-seg::-webkit-scrollbar { display: none; }
   .nav-col .floor-seg button { flex: none; }
-  .tools { position: absolute; z-index: 3; top: 58px; right: 8px; }
-  .compass { width: 38px; height: 38px; }
+  .map-ctl { display: contents; }
+  .map-ctl .compass { position: absolute; z-index: 3; top: 58px; right: 8px; width: 38px; height: 38px; }
   /* как в картах: компас появляется, только когда план повёрнут */
-  .plan-pane:not(.turned) .tools .compass { opacity: 0; scale: .6; pointer-events: none; }
+  .plan-pane:not(.turned) .map-ctl .compass { opacity: 0; scale: .6; pointer-events: none; }
+  /* масштаб - столбиком над кнопкой маршрута, по её ширине */
+  .zoom-ctl { position: absolute; z-index: 4; right: 10px; bottom: calc(var(--tab-space) + 8px + 48px + 10px); padding: 2px; }
+  .zoom-ctl button { width: 42px; height: 42px; }
+  .zoom-ctl svg { width: 20px; height: 20px; }
+  .plan-wrap:has(.room-peek) .zoom-ctl, .plan-wrap:has(.time-island) .zoom-ctl, .app.routing .zoom-ctl { display: none; }
   .fl-w { display: none; }
   /* план до низа экрана, меню и кнопки плавают поверх */
   .plan-wrap { display: flex; flex-direction: column; }
@@ -1423,10 +1464,10 @@ button.join { background: transparent; }
 @media (max-width: 900px) and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .tabbar { box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 10px 34px rgba(0,0,0,.5); }
   :root:not([data-theme="light"]) .tab-lens { box-shadow: inset 0 1px 0 rgba(255,255,255,.1); }
-  :root:not([data-theme="light"]) .nav-col .seg, :root:not([data-theme="light"]) .tools .compass { box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 6px 20px rgba(0,0,0,.45); }
+  :root:not([data-theme="light"]) .nav-col .seg, :root:not([data-theme="light"]) .map-ctl .compass, :root:not([data-theme="light"]) .zoom-ctl { box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 6px 20px rgba(0,0,0,.45); }
 }
 @media (max-width: 900px) {
   :root[data-theme="dark"] .tabbar { box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 10px 34px rgba(0,0,0,.5); }
   :root[data-theme="dark"] .tab-lens { box-shadow: inset 0 1px 0 rgba(255,255,255,.1); }
-  :root[data-theme="dark"] .nav-col .seg, :root[data-theme="dark"] .tools .compass { box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 6px 20px rgba(0,0,0,.45); }
+  :root[data-theme="dark"] .nav-col .seg, :root[data-theme="dark"] .map-ctl .compass, :root[data-theme="dark"] .zoom-ctl { box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 6px 20px rgba(0,0,0,.45); }
 }

@@ -90,15 +90,33 @@ function Compass() {
   );
 }
 
+// Подпись этажа в одну строку: если не влезает, текст медленно ездит туда-обратно
+function Marquee({ text, className }: { text: string; className?: string }) {
+  const box = useRef<HTMLDivElement>(null), inner = useRef<HTMLSpanElement>(null);
+  const [shift, setShift] = useState(0);
+  useLayoutEffect(() => {
+    const b = box.current!, i = inner.current!;
+    const measure = () => setShift(Math.max(0, Math.ceil(i.scrollWidth - b.clientWidth)));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(b);
+    return () => ro.disconnect();
+  }, [text]);
+  return (
+    <div className={cx("marquee", shift > 0 && "run", className)} ref={box} title={shift > 0 ? text : undefined}>
+      <span key={text} ref={inner} style={shift > 0 ? ({ "--shift": `${-shift}px`, "--dur": `${Math.max(6, shift / 25 + 4)}s` } as React.CSSProperties) : undefined}>{text}</span>
+    </div>
+  );
+}
+
 function PlanBar() {
-  const campusId = useApp((s) => s.campus), floor = useApp((s) => s.floor), angle = useApp((s) => s.angle);
+  const campusId = useApp((s) => s.campus), floor = useApp((s) => s.floor);
   const route = useApp((s) => s.route);
   const c = CAMPUSES[campusId];
   // этажи, по которым идёт выбранный маршрут
   const o = route.open && route.options ? route.options[route.sel] : null;
   const rtFloors = new Set(o ? o.steps.filter((s) => (s.campus || route.campus) === campusId && s.leg.type !== "city").map((s) => s.floor) : []);
   const nums = floorNums(c);
-  const rotate = (a: number) => planCtl.current?.rotateTo(a);
   return (
     <header className="plan-bar">
       {/* на телефоне полоса поверх плана сверху */}
@@ -109,21 +127,25 @@ function PlanBar() {
           items={nums.map((n) => ({ value: n, title: `${n} этаж`, className: rtFloors.has(n) ? "has-route" : "", label: <>{n}<span className="fl-w"> этаж</span></> }))} />
       </div>
       <div className="spacer" />
-      <div className="tools">
-        <button className="icon-btn" id="rotL" title="Повернуть против часовой" onClick={() => rotate(angle - 90)}><Icon name="rotL" /></button>
-        <Compass />
-        <button className="icon-btn" id="rotR" title="Повернуть по часовой" onClick={() => rotate(angle + 90)}><Icon name="rotR" /></button>
-        <span className="sep" />
-        <button className="icon-btn" id="zoomOut" title="Отдалить" onClick={() => planCtl.current?.zoomBy(1 / 1.4)}><Icon name="minus" /></button>
-        <button className="icon-btn" id="zoomIn" title="Приблизить" onClick={() => planCtl.current?.zoomBy(1.4)}><Icon name="plus" /></button>
-        <span className="sep" />
-        <ThemeButton />
-      </div>
+      <ThemeButton />
       <div className="floor-title">
         <div className="floor-n">Этаж {floor}</div>
-        <div className="floor-sum">{autoSummary(c, floor)}</div>
+        <Marquee className="floor-sum" text={autoSummary(c, floor)} />
       </div>
     </header>
+  );
+}
+
+// Управление картой поверх плана: компас (поворот) и масштаб
+function MapControls() {
+  return (
+    <div className="map-ctl">
+      <Compass />
+      <div className="zoom-ctl">
+        <button id="zoomIn" title="Приблизить" onClick={() => planCtl.current?.zoomBy(1.4)}><Icon name="plus" /></button>
+        <button id="zoomOut" title="Отдалить" onClick={() => planCtl.current?.zoomBy(1 / 1.4)}><Icon name="minus" /></button>
+      </div>
+    </div>
   );
 }
 
@@ -138,6 +160,7 @@ function PlanView() {
     <div className="plan-wrap" id="planWrap" ref={wrap}>
       <svg id="plan" ref={svg} xmlns="http://www.w3.org/2000/svg" />
       <div className="tooltip" ref={tip} hidden />
+      <MapControls />
       <TimeIsland />
       {!routeOpen && <RoomPeek />}
       {!routeOpen && (
