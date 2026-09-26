@@ -116,7 +116,7 @@ async function api<T = any>(method: string, path: string, body?: unknown): Promi
   if (!res.ok) {
     const err = new ApiError(res.status, data.error || "http", data.message || `Ошибка ${res.status}`);
     // сессия или пароль больше не действуют: выходим, чтобы не показывать старое как актуальное
-    if (res.status === 401 && S.session) { logout(); S.error = "Пароль приложения больше не действует. Войдите заново."; emit("logout"); }
+    if (res.status === 401 && S.session) { logout(); S.error = "Пароль приложения больше не действует. Войди заново."; emit("logout"); }
     throw err;
   }
   return data;

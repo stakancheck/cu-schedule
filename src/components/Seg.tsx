@@ -31,6 +31,11 @@ export function Seg<T extends string | number>({ items, value, onChange, classNa
       th.style.width = r.w + "px"; th.style.height = r.h + "px";
       th.style.transform = `translate(${r.x}px, ${r.y}px)`;
       last.current = r;
+      // в прокручиваемой полосе выбранная кнопка всегда на виду
+      if (seg.scrollWidth > seg.clientWidth) {
+        const left = r.x + r.w / 2 - seg.clientWidth / 2;
+        seg.scrollTo({ left, behavior: animate && p && !reduceMotion() ? "smooth" : "auto" });
+      }
     };
     place(true);
     // размер меняется, когда догрузится шрифт или переключатель появится на экране

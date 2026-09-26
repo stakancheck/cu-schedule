@@ -4,11 +4,12 @@ import { CAMPUSES, autoSummary, floorNums } from "../lib/schedule";
 import { useApp } from "../lib/store";
 import { openRoute, planCtl, setCampus, setFloor } from "../lib/actions";
 import { inTg, syncTgColors, tg } from "../lib/telegram";
-import { isPhone, lsGet, lsSet } from "../lib/util";
+import { cx, lsGet, lsSet } from "../lib/util";
 import { PlanRenderer } from "../plan/PlanRenderer";
 import { Seg } from "./Seg";
 import { Icon } from "./icons";
 import { RoomPeek } from "./Room";
+import { TimeIsland } from "./TimeIsland";
 import { PickBar, RouteSheet } from "./Route";
 
 // Тема: как в системе -> светлая -> тёмная
@@ -44,35 +45,73 @@ function ThemeButton() {
   );
 }
 
+// Компас: нажатие - север наверх, перетаскивание по кругу - поворот плана на любой угол
+const TICKS = Array.from({ length: 12 }, (_, i) => i * 30).filter((d) => d);
+function Compass() {
+  const angle = useApp((s) => s.angle);
+  // start - угол плана в начале, acc - сколько провернули пальцем
+  const drag = useRef<{ cx: number; cy: number; x: number; y: number; last: number; start: number; acc: number; moved: boolean } | null>(null);
+  const ptrAngle = (cx: number, cy: number, e: React.PointerEvent) => (Math.atan2(e.clientY - cy, e.clientX - cx) * 180) / Math.PI;
+  return (
+    <button className="compass" id="compass" title="Север наверх. Потяните по кругу, чтобы повернуть план"
+      onPointerDown={(e) => {
+        const b = e.currentTarget.getBoundingClientRect();
+        const cx = b.left + b.width / 2, cy = b.top + b.height / 2;
+        drag.current = { cx, cy, x: e.clientX, y: e.clientY, last: ptrAngle(cx, cy, e), start: angle, acc: 0, moved: false };
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current;
+        if (!d || (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 4)) return;
+        d.moved = true;
+        const a = ptrAngle(d.cx, d.cy, e);
+        d.acc += ((((a - d.last + 180) % 360) + 360) % 360) - 180;
+        d.last = a;
+        planCtl.current?.turn(d.start + d.acc);
+      }}
+      onPointerUp={() => {
+        const d = drag.current;
+        drag.current = null;
+        if (d?.moved) return planCtl.current?.settle();
+        const a = angle % 360;
+        planCtl.current?.rotateTo(angle - (a > 180 ? a - 360 : a < -180 ? a + 360 : a));
+      }}
+      onPointerCancel={() => { if (drag.current?.moved) planCtl.current?.settle(); drag.current = null; }}>
+      <svg viewBox="-20 -20 40 40" aria-hidden="true">
+        <g id="dial">
+          {TICKS.map((d) => <line key={d} className={d % 90 ? "tk" : "tk main"} y1={d % 90 ? -15.5 : -14.5} y2={-17} transform={`rotate(${d})`} />)}
+          <path className="n" d="M0,-8.5 L2.6,0 L-2.6,0Z" />
+          <path className="s" d="M0,8.5 L2.6,0 L-2.6,0Z" />
+          <circle className="hub" r="1.3" />
+          <text id="compassN">С</text>
+        </g>
+      </svg>
+    </button>
+  );
+}
+
 function PlanBar() {
   const campusId = useApp((s) => s.campus), floor = useApp((s) => s.floor), angle = useApp((s) => s.angle);
   const route = useApp((s) => s.route);
   const c = CAMPUSES[campusId];
   // этажи, по которым идёт выбранный маршрут
-  const o = route.open && route.options && route.campus === campusId ? route.options[route.sel] : null;
-  const rtFloors = new Set(o ? o.steps.map((s) => s.floor) : []);
+  const o = route.open && route.options ? route.options[route.sel] : null;
+  const rtFloors = new Set(o ? o.steps.filter((s) => (s.campus || route.campus) === campusId && s.leg.type !== "city").map((s) => s.floor) : []);
   const nums = floorNums(c);
   const rotate = (a: number) => planCtl.current?.rotateTo(a);
   return (
     <header className="plan-bar">
-      {/* на телефоне колонка поверх плана справа */}
+      {/* на телефоне полоса поверх плана сверху */}
       <div className="nav-col">
         <Seg value={campusId} onChange={setCampus} label="Кампус"
           items={Object.values(CAMPUSES).map((k) => ({ value: k.id, label: k.short }))} />
-        <Seg value={floor} onChange={setFloor} label="Этаж" className={nums.length > 4 ? "many" : ""}
+        <Seg value={floor} onChange={setFloor} label="Этаж" className={cx("floor-seg", nums.length > 4 && "many")}
           items={nums.map((n) => ({ value: n, title: `${n} этаж`, className: rtFloors.has(n) ? "has-route" : "", label: <>{n}<span className="fl-w"> этаж</span></> }))} />
       </div>
       <div className="spacer" />
       <div className="tools">
         <button className="icon-btn" id="rotL" title="Повернуть против часовой" onClick={() => rotate(angle - 90)}><Icon name="rotL" /></button>
-        <button className="compass" id="compass" title="Север наверх" onClick={() => {
-          // на телефоне компас - единственная кнопка поворота, крутит по часовой
-          if (isPhone()) return rotate(angle + 90);
-          const a = angle % 360;
-          rotate(angle - (a > 180 ? a - 360 : a < -180 ? a + 360 : a));
-        }}>
-          <svg viewBox="-20 -20 40 40"><path className="rot-hint" d="M11.3,-11.3 A16,16 0 0 1 4.1,15.5 M4.1,15.5 L8.8,17.3 M4.1,15.5 L7.2,11.5" /><g className="needle-wrap"><g id="needle"><path className="n" d="M0,-15 L5,0 L-5,0Z" /><path className="s" d="M0,15 L5,0 L-5,0Z" /></g><text id="compassN" y="-4.5" x="0">С</text></g></svg>
-        </button>
+        <Compass />
         <button className="icon-btn" id="rotR" title="Повернуть по часовой" onClick={() => rotate(angle + 90)}><Icon name="rotR" /></button>
         <span className="sep" />
         <button className="icon-btn" id="zoomOut" title="Отдалить" onClick={() => planCtl.current?.zoomBy(1 / 1.4)}><Icon name="minus" /></button>
@@ -98,14 +137,8 @@ function PlanView() {
   return (
     <div className="plan-wrap" id="planWrap" ref={wrap}>
       <svg id="plan" ref={svg} xmlns="http://www.w3.org/2000/svg" />
-      <div className="legend">
-        <span><i className="sw free" />Свободна</span>
-        <span><i className="sw soon" />Скоро пара</span>
-        <span><i className="sw busy" />Идёт пара</span>
-        <span><i className="sw kitchen" />Кухни, кафе</span>
-        <span><i className="sw staff" />Сотрудники</span>
-      </div>
       <div className="tooltip" ref={tip} hidden />
+      <TimeIsland />
       {!routeOpen && <RoomPeek />}
       {!routeOpen && (
         <button className="route-fab" title="Построить маршрут" onClick={() => openRoute()}>

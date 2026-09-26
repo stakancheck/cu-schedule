@@ -1,13 +1,16 @@
 /* Маршрут в словах: шаги пошагового режима, названия вариантов */
 import type { Leg, NavLink, RouteOption } from "./engine";
 import type { Place } from "./places";
+import { ADDRESS, CITY_TITLE, type CityLeg, type CityMode } from "./city";
 
-export type StepKind = "walk" | "stairs" | "lift";
-export interface Step { leg: Leg; kind: StepKind; floor: number; title: string; text: string; meta: string }
-export type Option = RouteOption & { steps: Step[] };
+export type AnyLeg = Leg | CityLeg;
+export type StepKind = "walk" | "stairs" | "lift" | CityMode;
+// campus - где идёт шаг (в маршруте между кампусами), floor - этаж, который показать на плане
+export interface Step { leg: AnyLeg; kind: StepKind; floor: number; title: string; text: string; meta: string; campus?: string }
+export type Option = Omit<RouteOption, "legs"> & { legs: AnyLeg[]; steps: Step[]; city?: CityLeg };
 
 export const fmtDur = (s: number) => (s < 45 ? "меньше минуты" : `≈ ${Math.round(s / 60)} мин`);
-export const fmtLen = (m: number) => `${Math.max(5, Math.round(m / 5) * 5)} м`;
+export const fmtLen = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(1).replace(".", ",")} км` : `${Math.max(5, Math.round(m / 5) * 5)} м`);
 const linkWord = (l: NavLink) => (l.kind === "lift" ? "лифта" : "лестницы") + (l.name ? " " + l.name : "");
 
 function goalWord(b: Place, goal: RouteOption["goal"]) {
@@ -38,7 +41,14 @@ export function stepsOf(o: RouteOption, to: Place): Step[] {
   return out;
 }
 
-export function optTitle(o: RouteOption, i: number) {
+// Шаг по городу: показываем на плане выход, из которого идём
+export function cityStep(c: CityLeg, floor: number): Step {
+  return { leg: c, kind: c.mode, floor, campus: c.from, title: "По городу",
+    text: `${CITY_TITLE[c.mode]} в ${ADDRESS[c.to].name}`, meta: `${fmtDur(c.time)} · ${ADDRESS[c.to].addr}` };
+}
+
+export function optTitle(o: Option, i: number) {
+  if (o.city) return CITY_TITLE[o.city.mode];
   if (i === 0) return "Рекомендуемый";
   if (o.kinds.length === 1 && o.kinds[0] === "lift") return "Без лестниц";
   if (o.kinds.length === 1 && o.kinds[0] === "stairs") return "Без лифта";

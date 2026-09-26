@@ -365,8 +365,9 @@ function placeCell(g: Grid, ls: NavLink[], x: number, y: number, other = -1) {
 
 /* ============================================================ Маршрут */
 export interface GoalPoint { floor: number; x: number; y: number; title?: string }
-export type WalkLeg = { type: "walk"; floor: number; pts: Pt[]; len: number; fromLink: NavLink | null; toLink: NavLink | null };
-export type RideLeg = { type: "ride"; link: NavLink; kind: Kind; from: number; to: number; time: number; at: Pt; fromAt: Pt };
+// campus заполняется только в маршруте между кампусами, иначе отрезок в кампусе маршрута
+export type WalkLeg = { type: "walk"; floor: number; pts: Pt[]; len: number; fromLink: NavLink | null; toLink: NavLink | null; campus?: string };
+export type RideLeg = { type: "ride"; link: NavLink; kind: Kind; from: number; to: number; time: number; at: Pt; fromAt: Pt; campus?: string };
 export type Leg = WalkLeg | RideLeg;
 export interface RouteOption { profile: string; legs: Leg[]; goal: GoalPoint; walk: number; time: number; kinds: Kind[] }
 export type PlanResult = { error: string; options?: undefined } | { options: RouteOption[]; error?: undefined };

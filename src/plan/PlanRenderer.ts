@@ -9,7 +9,8 @@ import { fmt, isPhone, reduceMotion } from "../lib/util";
 import { debugImage, links } from "../nav/engine";
 import { getPlace } from "../nav/places";
 import { NAV } from "../nav/data";
-import { RT_IC } from "../components/icons";
+import { CITY_IC, RT_IC } from "../components/icons";
+import { ADDRESS } from "../nav/city";
 
 const SVGNS = "http://www.w3.org/2000/svg";
 export const NAV_DEBUG = /[?&]navdebug\b/.test(location.search);
@@ -29,6 +30,43 @@ const ROOM_FILL: Record<string, string> = { kitchen: "kitchen", staff: "staff", 
 const isCowork = (r: { label?: string; text?: string }) => /Коворкинг|Опенспейс/.test(r.label || r.text || "") && !/сотрудник/.test(r.label || r.text || "");
 const short = (t: string, n = 26) => (t.length > n ? t.slice(0, n - 1).trimEnd() + "…" : t);
 
+const angleOf = (a: [number, number], b: [number, number]) => (Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI;
+const wrap180 = (d: number) => ((((d + 180) % 360) + 360) % 360) - 180;
+
+// Листы PDF с этажами сдвинуты друг относительно друга (у Дуката до сотни единиц).
+// Сдвиг этажа до общей системы считаем по лестницам и лифтам: у них на каждом
+// этаже одна и та же точка здания. Этажи без общей связи с остальными не сдвигаем.
+const shiftCache: Record<string, Record<number, [number, number]>> = {};
+function floorShift(campus: Campus, n: number): [number, number] {
+  let sh = shiftCache[campus.id];
+  if (!sh) {
+    const nav = NAV[campus.id]?.links || [];
+    const nums = Object.keys(campus.floors).map(Number).sort((a, b) => a - b);
+    sh = shiftCache[campus.id] = { [nums[0]]: [0, 0] };
+    // обход в ширину от нижнего этажа: сдвиг соседа = свой + среднее расхождение общих связей
+    for (let queue = [nums[0]]; queue.length; ) {
+      const a = queue.shift()!;
+      const d: Record<number, [number, number, number]> = {};
+      for (const l of nav) {
+        const pa = l.at[a];
+        if (!pa) continue;
+        for (const k in l.at) {
+          const b = Number(k);
+          if (b === a || sh[b]) continue;
+          const v = (d[b] ||= [0, 0, 0]);
+          v[0] += pa[0] - l.at[b][0]; v[1] += pa[1] - l.at[b][1]; v[2]++;
+        }
+      }
+      for (const k in d) {
+        const [x, y, c] = d[k];
+        sh[k] = [sh[a][0] + x / c, sh[a][1] + y / c];
+        queue.push(Number(k));
+      }
+    }
+  }
+  return sh[n] || [0, 0];
+}
+
 interface Upright { g: SVGGElement; x: number; y: number }
 interface Rotating extends Upright { angle: number }
 
@@ -47,7 +85,13 @@ export class PlanRenderer {
   private zoom = 1;
   private pan: [number, number] = [0, 0];
   private focusAnim = 0;
-  private drag: { x: number; y: number; moved: boolean; target: Element | null; pinch?: number } | null = null;
+  private inset = 0; // пикселей снизу под панелью: вид вписывается в то, что над ней
+  private insetAnim = 0;
+  private drag: {
+    x: number; y: number; moved: boolean; target: Element | null;
+    pinch?: number; ang?: number; twist?: number; turning?: boolean; // два пальца: расстояние, угол, накопленный поворот
+    spin?: number;                                                    // Shift + мышь: угол указателя вокруг центра
+  } | null = null;
   private pointers = new Map<number, [number, number]>();
   private unsub: () => void;
   private off: (() => void)[] = [];
@@ -64,7 +108,10 @@ export class PlanRenderer {
       focusRoom: (id) => this.focusRoom(id),
       focusBox: (b, o) => this.focusBox(b, o),
       rotateTo: (a) => this.rotateTo(a),
+      turn: (a) => this.turnAround(a),
+      settle: () => this.settle(),
       zoomBy: (k) => this.zoomAt(k),
+      setInset: (px) => this.setInset(px),
     };
     const onResize = () => this.applyTransform();
     window.addEventListener("resize", onResize);
@@ -83,8 +130,17 @@ export class PlanRenderer {
 
   private onState(s: AppState, prev: AppState) {
     if (s.campus !== prev.campus || s.floor !== prev.floor) {
-      if (s.campus !== prev.campus) { this.campus = CAMPUSES[s.campus]; this.updateCenter(); }
-      this.zoom = 1; this.pan = [0, 0];
+      if (s.campus !== prev.campus) {
+        this.campus = CAMPUSES[s.campus]; this.updateCenter();
+        this.zoom = 1; this.pan = [0, 0];
+      } else {
+        // тот же кампус: масштаб прежний, в центре экрана то же место здания
+        this.focusAnim++;
+        const [ax, ay] = floorShift(this.campus, prev.floor), [bx, by] = floorShift(this.campus, s.floor);
+        const r = (this.viewAngle * Math.PI) / 180, dx = ax - bx, dy = ay - by;
+        this.pan[0] += dx * Math.cos(r) - dy * Math.sin(r);
+        this.pan[1] += dx * Math.sin(r) + dy * Math.cos(r);
+      }
       this.build();
       return;
     }
@@ -235,7 +291,10 @@ export class PlanRenderer {
     this.routeMarks = [];
     const s = getState(), r = s.route;
     const o = r.open && r.options ? r.options[r.sel] : null;
-    if (!o || r.campus !== s.campus) return;
+    if (!o) return;
+    // в маршруте между кампусами у отрезков свой кампус, рисуем только отрезки этого плана
+    const here = (l: { campus?: string }) => (l.campus || r.campus) === s.campus;
+    if (!o.legs.some((l) => (l.type === "city" ? l.from === s.campus || l.to === s.campus : here(l)))) return;
     const cur = r.step >= 0 ? o.steps[r.step] : null;
     const top = this.routeTop;
     const mark = (x: number, y: number, cls: string) => {
@@ -244,7 +303,7 @@ export class PlanRenderer {
       return g;
     };
     for (const leg of o.legs) {
-      if (leg.type !== "walk" || leg.floor !== s.floor || leg.pts.length < 2) continue;
+      if (leg.type !== "walk" || !here(leg) || leg.floor !== s.floor || leg.pts.length < 2) continue;
       const d = "M" + leg.pts.map((p) => p.map((v) => v.toFixed(1)).join(",")).join("L");
       const dim = !!cur && cur.leg !== leg;
       const g = el("g", { class: "rt-leg" + (dim ? " dim" : "") }, this.routeG);
@@ -255,20 +314,41 @@ export class PlanRenderer {
     // старт: начало первого пешего отрезка
     const first = o.legs[0];
     const start = getPlace(r.from);
-    if (start && start.floor === s.floor) {
+    if (start && start.campus === s.campus && start.floor === s.floor && first.type !== "city") {
       const [x, y] = first.type === "walk" && first.pts.length ? first.pts[0] : [start.x!, start.y!];
       el("circle", { r: 7 }, mark(x, y, "rt-start"));
     }
     const last = o.legs[o.legs.length - 1];
-    if (last.type === "walk" && last.floor === s.floor) {
+    if (last.type === "walk" && here(last) && last.floor === s.floor) {
       const [x, y] = last.pts[last.pts.length - 1];
       const g = mark(x, y, "rt-goal");
       el("path", { d: "M0,0C-3,-6 -11,-11 -11,-20A11,11 0 1 1 11,-20C11,-11 3,-6 0,0Z" }, g);
       el("circle", { cy: -20, r: 4.2 }, g);
     }
+    // выход на улицу и вход с улицы в маршруте между кампусами
+    const city = o.legs.findIndex((l) => l.type === "city");
+    if (city >= 0) {
+      const c = o.legs[city] as Extract<(typeof o.legs)[number], { type: "city" }>;
+      const on = !!cur && cur.leg === c;
+      const ends: [string, typeof o.legs[number] | undefined, "end" | "start", string][] = [
+        [c.from, o.legs[city - 1], "end", "→ " + CAMPUSES[c.to].short],
+        [c.to, o.legs[city + 1], "start", "из " + CAMPUSES[c.from].short],
+      ];
+      for (const [cid, leg, side, txt] of ends) {
+        if (cid !== s.campus) continue;
+        let p: [number, number] | null = null, n = 0;
+        if (leg && leg.type === "walk") { p = side === "end" ? leg.pts[leg.pts.length - 1] : leg.pts[0]; n = leg.floor; }
+        else {
+          const e = getPlace(ADDRESS[cid].entrance);
+          if (e) { p = [e.x!, e.y!]; n = e.floor!; }
+        }
+        if (!p || n !== s.floor) continue;
+        this.pill(mark(p[0], p[1], "rt-ride" + (on ? " on" : "")), txt, CITY_IC[c.mode]);
+      }
+    }
     // переходы: на этаже отправления «↑ 3 этаж», на этаже прибытия «с 1 этажа»
     for (const leg of o.legs) {
-      if (leg.type !== "ride") continue;
+      if (leg.type !== "ride" || !here(leg)) continue;
       const on = !!cur && cur.leg === leg;
       const ends: [number, [number, number], string][] = [
         [leg.from, leg.fromAt, (leg.to > leg.from ? "↑ " : "↓ ") + leg.to + " этаж"],
@@ -276,16 +356,20 @@ export class PlanRenderer {
       ];
       for (const [n, p, txt] of ends) {
         if (n !== s.floor) continue;
-        const g = mark(p[0], p[1], "rt-ride" + (on ? " on" : ""));
-        const w = txt.length * 6.6 + 34;
-        el("rect", { x: -w / 2, y: -30, width: w, height: 22, rx: 11 }, g);
-        const ic = el("g", { transform: `translate(${-w / 2 + 6},-27) scale(.66)`, class: "rt-ride-ic" }, g);
-        ic.innerHTML = RT_IC[leg.kind].replace(/^<svg[^>]*>|<\/svg>$/g, "");
-        el("text", { x: -w / 2 + 25, y: -19 }, g).textContent = txt;
-        el("circle", { r: 4.5 }, g);
+        this.pill(mark(p[0], p[1], "rt-ride" + (on ? " on" : "")), txt, RT_IC[leg.kind]);
       }
     }
     this.applyTransform();
+  }
+
+  // Подпись-пилюля над точкой: иконка и текст
+  private pill(g: SVGGElement, txt: string, icon: string) {
+    const w = txt.length * 6.6 + 34;
+    el("rect", { x: -w / 2, y: -30, width: w, height: 22, rx: 11 }, g);
+    const ic = el("g", { transform: `translate(${-w / 2 + 6},-27) scale(.66)`, class: "rt-ride-ic" }, g);
+    ic.innerHTML = icon.replace(/^<svg[^>]*>|<\/svg>$/g, "");
+    el("text", { x: -w / 2 + 25, y: -19 }, g).textContent = txt;
+    el("circle", { r: 4.5 }, g);
   }
 
   /* ---------- поворот и масштаб */
@@ -311,19 +395,76 @@ export class PlanRenderer {
       s.g.setAttribute("transform", `translate(${s.x},${s.y}) rotate(${v - a})`);
     }
     // рамка по повернутому extent
-    const rot = this.rotated(a);
-    const rp = this.campus.extent.map(([x, y]) => rot(x, y));
-    const xs = rp.map((p) => p[0]), ys = rp.map((p) => p[1]);
-    const w = (Math.max(...xs) - Math.min(...xs)) / this.zoom, h = (Math.max(...ys) - Math.min(...ys)) / this.zoom;
-    const cx = CX + this.pan[0], cy = CY + this.pan[1];
+    // вид ровно по размеру экрана: план вписан в часть над нижней панелью и сдвинут вверх на половину её высоты
+    const box = this.svg.getBoundingClientRect();
+    const W = box.width || 800, H = box.height || 600;
+    const u = this.baseUpp(a) / this.zoom; // единиц плана в пикселе
+    const w = W * u, h = H * u;
+    const cx = CX + this.pan[0], cy = CY + this.pan[1] + (this.visibleInset(H) * u) / 2;
     this.svg.setAttribute("viewBox", `${cx - w / 2} ${cy - h / 2} ${w} ${h}`);
     // метки маршрута одного размера на экране при любом масштабе
-    const box = this.svg.getBoundingClientRect();
-    const u = box.width ? Math.max(w / box.width, h / box.height) : 2; // единиц плана в пикселе
     this.svg.style.setProperty("--u", u.toFixed(3) + "px");
     for (const l of this.routeMarks) l.g.setAttribute("transform", `translate(${l.x},${l.y}) rotate(${-a}) scale(${u.toFixed(3)})`);
-    document.getElementById("needle")?.setAttribute("transform", `rotate(${a})`);
-    document.getElementById("compassN")?.setAttribute("transform", `rotate(${a}) translate(0,-4.5) rotate(${-a}) translate(0,4.5)`);
+    document.getElementById("dial")?.setAttribute("transform", `rotate(${a})`);
+    document.getElementById("compassN")?.setAttribute("transform", `translate(0,-12) rotate(${-a})`);
+    const off = Math.abs(a - Math.round(a / 360) * 360);
+    this.svg.closest(".plan-pane")?.classList.toggle("turned", off > 0.5);
+  }
+
+  // Единиц плана в пикселе при zoom = 1: вписанная рамка зависит от угла
+  private baseUpp(a: number) {
+    const rot = this.rotated(a);
+    const rp = this.campus.extent.map(([x, y]) => rot(x, y));
+    const bw = Math.max(...rp.map((p) => p[0])) - Math.min(...rp.map((p) => p[0]));
+    const bh = Math.max(...rp.map((p) => p[1])) - Math.min(...rp.map((p) => p[1]));
+    const box = this.svg.getBoundingClientRect(), H = box.height || 600;
+    return Math.max(bw / (box.width || 800), bh / (H - this.visibleInset(H)));
+  }
+
+  // Панель не должна съедать больше половины плана, иначе он станет совсем мелким
+  private visibleInset(H: number) { return Math.min(this.inset, H * 0.5); }
+
+  // Нижняя панель открылась или закрылась: план плавно переезжает в видимую часть
+  setInset(px: number) {
+    px = Math.max(0, Math.round(px));
+    const from = this.inset, t0 = performance.now(), dur = reduceMotion() ? 0 : 280, id = ++this.insetAnim;
+    if (from === px) return;
+    const step = (now: number) => {
+      if (id !== this.insetAnim) return;
+      const k = dur ? Math.min(1, (now - t0) / dur) : 1;
+      this.inset = from + (px - from) * (1 - Math.pow(1 - k, 3));
+      this.applyTransform();
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  // Поворот рукой: точка под пальцем (по умолчанию центр экрана) остаётся на месте, масштаб не прыгает
+  private turnAround(a: number, clientX?: number, clientY?: number) {
+    this.focusAnim++;
+    if (clientX == null) { const b = this.svg.getBoundingClientRect(); clientX = b.left + b.width / 2; clientY = b.top + b.height / 2; }
+    const p = this.worldPoint(clientX, clientY!);
+    this.zoom = Math.min(6, Math.max(0.5, (this.zoom * this.baseUpp(a)) / this.baseUpp(this.viewAngle)));
+    this.viewAngle = a;
+    this.applyTransform();
+    const sp = this.svgPoint(clientX, clientY!), [rx, ry] = this.rotated(a)(p.x, p.y);
+    this.pan[0] += rx - sp.x;
+    this.pan[1] += ry - sp.y;
+    this.applyTransform();
+  }
+
+  // Конец поворота рукой: рядом с прямым углом доводим до него, угол сохраняем
+  private settle() {
+    const from = this.viewAngle, to = Math.round(from / 90) * 90;
+    if (Math.abs(to - from) > 7 || to === from) { setState({ angle: from }); return; }
+    setState({ angle: to });
+    const t0 = performance.now(), dur = reduceMotion() ? 0 : 220;
+    const step = (now: number) => {
+      const k = dur ? Math.min(1, (now - t0) / dur) : 1;
+      this.turnAround(from + (to - from) * (1 - Math.pow(1 - k, 3)));
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
   }
 
   rotateTo(target: number) {
@@ -356,7 +497,7 @@ export class PlanRenderer {
   zoomAt(factor: number, clientX?: number, clientY?: number) {
     this.focusAnim++; // ручной масштаб отменяет наведение на аудиторию
     const before = clientX != null ? this.svgPoint(clientX, clientY!) : null;
-    this.zoom = Math.min(6, Math.max(1, this.zoom * factor));
+    this.zoom = Math.min(6, Math.max(Math.min(1, this.zoom), this.zoom * factor)); // после поворота рукой бывает меньше 1
     if (this.zoom === 1) this.pan = [0, 0];
     this.applyTransform();
     if (before && this.zoom > 1) {
@@ -426,10 +567,11 @@ export class PlanRenderer {
       this.pointers.set(e.pointerId, [e.clientX, e.clientY]);
       if (this.pointers.size === 2) {
         const [a, b] = [...this.pointers.values()];
-        this.drag = { x: 0, y: 0, pinch: Math.hypot(a[0] - b[0], a[1] - b[1]), moved: true, target: null };
+        this.drag = { x: 0, y: 0, pinch: Math.hypot(a[0] - b[0], a[1] - b[1]), ang: angleOf(a, b), twist: 0, moved: true, target: null };
         return;
       }
       this.drag = { x: e.clientX, y: e.clientY, moved: false, target: e.target as Element };
+      if (e.pointerType === "mouse" && e.shiftKey) this.drag.spin = this.centerAngle(e.clientX, e.clientY);
     });
     on("pointermove", (e) => {
       this.moveTip(e);
@@ -439,14 +581,30 @@ export class PlanRenderer {
       if (d.pinch && this.pointers.size === 2) {
         const [a, b] = [...this.pointers.values()];
         const dist = Math.hypot(a[0] - b[0], a[1] - b[1]);
-        this.zoomAt(dist / d.pinch, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+        const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+        this.zoomAt(dist / d.pinch, mx, my);
         d.pinch = dist;
+        // поворот включается, только когда пальцы заметно провернули: обычный щипок план не крутит
+        const ang = angleOf(a, b);
+        let da = wrap180(ang - d.ang!);
+        d.ang = ang;
+        if (!d.turning) {
+          d.twist! += da;
+          if (Math.abs(d.twist!) < 14) return;
+          d.turning = true;
+          da = d.twist!;
+        }
+        this.turnAround(this.viewAngle + da, mx, my);
         return;
       }
       const dx = e.clientX - d.x, dy = e.clientY - d.y;
       if (!d.moved && Math.hypot(dx, dy) < 5) return;
       if (!d.moved) { d.moved = true; svg.setPointerCapture(e.pointerId); svg.classList.add("dragging"); this.hideTip(); }
-      if (this.zoom > 1) {
+      if (d.spin != null) {
+        const ang = this.centerAngle(e.clientX, e.clientY);
+        this.turnAround(this.viewAngle + wrap180(ang - d.spin));
+        d.spin = ang;
+      } else if (this.zoom > 1) {
         const p0 = this.svgPoint(d.x, d.y), p1 = this.svgPoint(e.clientX, e.clientY);
         this.pan[0] -= p1.x - p0.x;
         this.pan[1] -= p1.y - p0.y;
@@ -458,13 +616,24 @@ export class PlanRenderer {
       this.pointers.delete(e.pointerId);
       const d = this.drag;
       if (!d) return;
+      if (d.turning || (d.spin != null && d.moved)) { d.turning = false; this.settle(); }
       if (this.pointers.size === 0) { this.drag = null; svg.classList.remove("dragging"); }
+      else if (d.pinch) {
+        // один палец остался: дальше он двигает план от своей точки
+        const [x, y] = [...this.pointers.values()][0];
+        this.drag = { x, y, moved: true, target: null };
+      }
       if (!d.moved && e.type === "pointerup") this.tap(e, d.target);
     };
     on("pointerup", endDrag);
     on("pointercancel", endDrag);
     on("pointerover", (e) => this.showTip(e));
     on("pointerout", (e) => { if ((e.target as Element).closest?.("[data-room]")) this.hideTip(); });
+  }
+
+  private centerAngle(x: number, y: number) {
+    const b = this.svg.getBoundingClientRect();
+    return (Math.atan2(y - (b.top + b.height / 2), x - (b.left + b.width / 2)) * 180) / Math.PI;
   }
 
   private tap(e: PointerEvent, target: Element | null) {

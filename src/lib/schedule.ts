@@ -2,8 +2,18 @@
 import type { Campus, Pt } from "../types";
 import { toMin } from "./util";
 
-export const DAY_START = 8 * 60;   // границы «рабочего дня» для свободных окон
+export const DAY_START = 8 * 60;   // границы дня для кампусов без своих часов
 export const DAY_END = 22 * 60;
+// Часы работы: ЦТ с 8 до 20, Дукат круглосуточно
+const OPEN_HOURS: Record<string, [number, number]> = { CT: [8 * 60, 20 * 60], DUCAT: [0, 24 * 60] };
+export const dayRange = (campus: string): [number, number] => OPEN_HOURS[campus] || [DAY_START, DAY_END];
+// Подписи часов на шкале: при длинном дне реже, чтобы не слипались
+export function hourMarks(campus: string) {
+  const [a, b] = dayRange(campus), step = b - a > 16 * 60 ? 3 : 2;
+  const out: { h: number; label: boolean }[] = [];
+  for (let h = a / 60; h <= b / 60; h++) out.push({ h, label: (h - a / 60) % step === 0 });
+  return out;
+}
 const SOON_MIN = 30;               // «скоро пара», если до начала меньше получаса
 const MIN_WINDOW = 15;             // окна короче не показываем
 
@@ -121,12 +131,13 @@ export function roomStatus(room: string, date: string, t: number): Status {
 
 export function freeWindows(room: string, date: string) {
   const out: [number, number][] = [];
-  let cur = DAY_START;
+  const [start, end] = dayRange(roomCampus[room]);
+  let cur = start;
   for (const b of occupancy(date)[room] || []) {
-    if (b.s - cur >= MIN_WINDOW) out.push([cur, Math.min(b.s, DAY_END)]);
+    if (b.s - cur >= MIN_WINDOW) out.push([cur, Math.min(b.s, end)]);
     cur = Math.max(cur, b.e);
   }
-  if (DAY_END - cur >= MIN_WINDOW) out.push([cur, DAY_END]);
+  if (end - cur >= MIN_WINDOW) out.push([cur, end]);
   return out;
 }
 

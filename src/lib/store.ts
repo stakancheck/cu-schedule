@@ -6,7 +6,7 @@ import { account } from "./account";
 import { getPlace } from "../nav/places";
 import type { Option } from "../nav/steps";
 
-export type View = "plan" | "list" | "info";
+export type View = "plan" | "list" | "profile";
 export type Field = "from" | "to";
 
 export interface RouteState {
@@ -30,14 +30,15 @@ export interface AppState {
   live: boolean;
   room: string | null;       // выбранная на плане аудитория
   roomScreen: boolean;       // телефон: расписание выбранной аудитории на весь экран
-  angle: number;             // поворот плана, градусы (кратно 90)
+  freeScreen: boolean;       // вкладка «Расписание»: экран свободных аудиторий вместо списка пар
+  angle: number;             // поворот плана, градусы (любой, кнопки крутят на 90)
   view: View;                // вкладка мобильной версии
   mine: boolean;             // список: мои пары или все
-  scope: "all" | "floor";
   query: string;
   showPast: boolean;
   route: RouteState;
   toast: { text: string; id: number } | null;
+  guide: number | null;      // инструкция подключения календаря: открытый слайд или null
 }
 
 export const emptyRoute: RouteState = {
@@ -47,9 +48,9 @@ export const emptyRoute: RouteState = {
 function initialState(): AppState {
   const s: AppState = {
     campus: "CT", floor: 3, date: todayIso(), t: nowMin(), live: true,
-    room: null, roomScreen: false, angle: 0, view: "plan",
+    room: null, roomScreen: false, freeScreen: false, angle: 0, view: "plan",
     mine: account.enabled && (lsGet("cu.mode") ? lsGet("cu.mode") === "mine" : !!account.user),
-    scope: "all", query: "", showPast: false, route: emptyRoute, toast: null,
+    query: "", showPast: false, route: emptyRoute, toast: null, guide: null,
   };
   const h = new URLSearchParams(location.hash.slice(1));
   const c = h.get("c");
@@ -71,7 +72,9 @@ function initialState(): AppState {
   if (t && /^\d\d:\d\d$/.test(t)) { s.t = toMin(t); s.live = false; }
   else if (s.date !== todayIso()) { s.t = OTHER_DAY_T; s.live = false; }
   const v = h.get("v");
-  if (v === "list" || v === "info") s.view = v;
+  if (v === "list" || v === "profile") s.view = v;
+  if (v === "info") s.view = "profile"; // старые ссылки на «Полезное»
+  if (v === "free") { s.view = "list"; s.freeScreen = true; }
   return s;
 }
 
@@ -109,8 +112,10 @@ function writeHash(s: AppState) {
   if (s.date !== todayIso()) h.set("d", s.date);
   if (!s.live) h.set("t", fmt(s.t));
   if (s.room) h.set("r", s.room);
-  if (s.angle) h.set("rot", String(((s.angle % 360) + 360) % 360));
+  const rot = ((Math.round(s.angle) % 360) + 360) % 360;
+  if (rot) h.set("rot", String(rot));
   if (s.roomScreen && s.room) h.set("v", "room");
+  else if (s.freeScreen && s.view === "list") h.set("v", "free");
   else if (s.view !== "plan") h.set("v", s.view);
   if (s.route.open) {
     if (s.route.from) h.set("rf", s.route.from);

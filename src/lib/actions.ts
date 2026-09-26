@@ -4,8 +4,10 @@ import { getState, setRoute, setState, emptyRoute, type Field, type View } from 
 import { haptic } from "./telegram";
 import { isPhone, lsGet, lsSet, nowMin, OTHER_DAY_T, todayIso } from "./util";
 import { canStand, inPoly, plan as planRoute } from "../nav/engine";
-import { getPlace, mainEntrance, NEAREST, pointKey } from "../nav/places";
-import { stepsOf } from "../nav/steps";
+import { getPlace, mainEntrance, NEAREST, pointKey, type Place } from "../nav/places";
+import { cityStep, stepsOf, type Option } from "../nav/steps";
+import { ADDRESS, cityLegs } from "../nav/city";
+import type { GoalPoint, RouteOption } from "../nav/engine";
 import type { Pt } from "../types";
 
 /* ---------- связь с планом: методы регистрирует PlanView */
@@ -15,7 +17,10 @@ export interface PlanControl {
   focusRoom(id: string): void;
   focusBox(b: Box, o?: FocusOpts): void;
   rotateTo(angle: number): void;
+  turn(angle: number): void;   // поворот рукой без анимации, вокруг центра экрана
+  settle(): void;              // конец поворота рукой: доводка к прямому углу и сохранение
   zoomBy(k: number): void;
+  setInset(px: number): void; // сколько пикселей снизу закрыто панелью: план поднимается над ней
 }
 export const planCtl: { current: PlanControl | null } = { current: null };
 // После смены состояния React перерисовывает экран в следующем кадре: камеру двигаем после него
@@ -67,6 +72,11 @@ export function pickRoom(room: string) {
 
 export const openRoomScreen = () => { if (getState().room) setState({ roomScreen: true }); };
 export const closeRoomScreen = () => setState({ roomScreen: false });
+export const openFreeScreen = () => setState({ freeScreen: true });
+export const closeFreeScreen = () => setState({ freeScreen: false });
+
+export const openGuide = (slide = 0) => { haptic.select(); setState({ guide: slide }); };
+export const closeGuide = () => setState({ guide: null });
 
 export function setView(v: View) {
   if (v === getState().view) return;
@@ -146,8 +156,9 @@ export function computeRoute() {
   setRoute({ options: null, error: null, sel: 0, step: -1, busy: false });
   const a = getPlace(r.from), b = getPlace(r.to);
   if (!a || !b || !a.campus) return;
-  if (b.kind !== "nearest" && b.campus !== a.campus) {
-    setRoute({ error: "Места в разных кампусах, а маршрут строится внутри одного здания." });
+  const cross = b.kind !== "nearest" && b.campus !== a.campus;
+  if (cross && (!ADDRESS[a.campus] || !ADDRESS[b.campus!])) {
+    setRoute({ error: "Для этого кампуса пока не знаю дорогу по городу" });
     return;
   }
   setRoute({ busy: true });
@@ -156,6 +167,12 @@ export function computeRoute() {
   setTimeout(() => {
     if (job !== routeJob) return;
     const cid = a.campus!;
+    if (cross) {
+      const res = crossRoute(a, b);
+      if (typeof res === "string") setRoute({ busy: false, error: res });
+      else { setRoute({ busy: false, campus: cid, options: res }); focusOption(); }
+      return;
+    }
     const to = b.kind === "nearest" ? { points: NEAREST[b.key].points(cid) } : { floor: b.floor!, x: b.x!, y: b.y! };
     let res;
     try { res = planRoute(cid, { floor: a.floor!, x: a.x!, y: a.y! }, to); }
@@ -164,6 +181,39 @@ export function computeRoute() {
     setRoute({ busy: false, campus: cid, options: res.options.map((o) => ({ ...o, steps: stepsOf(o, b) })) });
     focusOption();
   }, 30);
+}
+
+const at = (p: Place): GoalPoint => ({ floor: p.floor!, x: p.x!, y: p.y! });
+
+// Между кампусами: до выхода в первом здании, по городу, от входа до цели во втором.
+// Внутри зданий берём рекомендуемый путь, варианты - способы добраться по городу.
+function crossRoute(a: Place, b: Place): Option[] | string {
+  const exit = getPlace(ADDRESS[a.campus!].entrance)!, door = getPlace(ADDRESS[b.campus!].entrance)!;
+  const inside = (p: Place, q: Place): RouteOption | string | null => {
+    if (p.key === q.key) return null; // уже у входа
+    try {
+      const res = planRoute(p.campus!, at(p), at(q));
+      return res.options ? res.options[0] : res.error!;
+    } catch (e) { console.error(e); return "Не получилось проложить маршрут"; }
+  };
+  const A = inside(a, exit), B = inside(door, b);
+  if (typeof A === "string") return A;
+  if (typeof B === "string") return B;
+  const tag = <T extends object>(legs: T[], campus: string) => legs.map((l) => ({ ...l, campus }));
+  const legsA = A ? tag(A.legs, a.campus!) : [], legsB = B ? tag(B.legs, b.campus!) : [];
+  const stepsA = A ? stepsOf({ ...A, legs: legsA }, exit).map((s) => ({ ...s, campus: a.campus })) : [];
+  const stepsB = B ? stepsOf({ ...B, legs: legsB }, b).map((s) => ({ ...s, campus: b.campus })) : [];
+  // первый шаг во втором здании: иначе «1 этаж» непонятно где
+  if (stepsB[0]) stepsB[0] = { ...stepsB[0], text: `${CAMPUSES[b.campus!].short}: ${stepsB[0].text[0].toLowerCase()}${stepsB[0].text.slice(1)}` };
+  return cityLegs(a.campus!, b.campus!).map((c) => ({
+    profile: "city:" + c.mode, city: c,
+    legs: [...legsA, c, ...legsB],
+    goal: B ? B.goal : at(b),
+    walk: (A?.walk || 0) + c.walk + (B?.walk || 0),
+    time: (A?.time || 0) + c.time + (B?.time || 0),
+    kinds: [...new Set([...(A?.kinds || []), ...(B?.kinds || [])])],
+    steps: [...stepsA, cityStep(c, exit.floor!), ...stepsB],
+  }));
 }
 
 const curOption = () => { const r = getState().route; return r.options ? r.options[r.sel] : null; };
@@ -180,9 +230,10 @@ export function focusOption() {
   const o = curOption(), cid = getState().route.campus;
   if (!o || !cid) return;
   const first = o.steps[0];
-  showFloor(cid, first.leg.type === "walk" ? first.floor : first.leg.from);
+  showFloor(first.campus || cid, first.leg.type === "ride" ? first.leg.from : first.floor);
   afterPaint(() => {
-    const leg = o.legs.find((l) => l.type === "walk" && l.floor === getState().floor);
+    const s = getState();
+    const leg = o.legs.find((l) => l.type === "walk" && l.floor === s.floor && (l.campus || cid) === s.campus);
     if (leg && leg.type === "walk") planCtl.current?.focusBox(bboxOf(leg.pts), { fill: 0.8, square: false, minZoom: 1, maxZoom: 3 });
   });
 }
@@ -206,11 +257,15 @@ export function goStep(i: number) {
   const step = Math.max(0, Math.min(o.steps.length - 1, i));
   const s = o.steps[step];
   setRoute({ step });
-  showFloor(cid, s.floor);
+  showFloor(s.campus || cid, s.floor);
   haptic.select();
   afterPaint(() => {
     const bottom = sheetCover();
-    if (s.leg.type === "walk") planCtl.current?.focusBox(bboxOf(s.leg.pts), { fill: 0.78, square: false, minZoom: 1.2, maxZoom: 3.5, bottom });
+    if (s.leg.type === "city") {
+      // по городу: показываем вход, через который выходим
+      const e = getPlace(ADDRESS[s.leg.from].entrance)!;
+      planCtl.current?.focusBox({ x: e.x! - 120, y: e.y! - 120, width: 240, height: 240 }, { fill: 0.5, minZoom: 1.5, maxZoom: 3, bottom });
+    } else if (s.leg.type === "walk") planCtl.current?.focusBox(bboxOf(s.leg.pts), { fill: 0.78, square: false, minZoom: 1.2, maxZoom: 3.5, bottom });
     else {
       const [x, y] = s.leg.at;
       planCtl.current?.focusBox({ x: x - 90, y: y - 90, width: 180, height: 180 }, { fill: 0.5, minZoom: 2, maxZoom: 3.5, bottom });

@@ -7,7 +7,7 @@ import {
 import { useAccountVersion } from "../lib/account";
 import { myRooms } from "../lib/mine";
 import { findPlaces, getPlace, placeName, placeWhere, type Place } from "../nav/places";
-import { fmtDur, fmtLen, optTitle, type Option } from "../nav/steps";
+import { fmtDur, fmtLen, optTitle, type Option, type Step } from "../nav/steps";
 import { cx, isPhone } from "../lib/util";
 import { Icon } from "./icons";
 
@@ -18,15 +18,32 @@ function sgIcon(p: Place) {
   return "•";
 }
 
+// Шаг по городу: как ехать по пунктам и ссылка на живой маршрут в Картах
+function CityText({ s, link = true }: { s: Step; link?: boolean }) {
+  if (s.leg.type !== "city") return null;
+  return (
+    <span className="rt-st">
+      <b>{s.text}</b>
+      <ol className="city-lines">{s.leg.lines.map((l, i) => <li key={i}>{l}</li>)}</ol>
+      <small>{s.meta}</small>
+      {link && <MapsLink s={s} />}
+    </span>
+  );
+}
+const MapsLink = ({ s }: { s: Step }) => s.leg.type === "city"
+  ? <a className="city-maps" href={s.leg.url} target="_blank" rel="noopener">Маршрут в Яндекс Картах ↗</a> : null;
+
 function Chips({ o }: { o: Option }) {
   return (
     <span className="rt-chips">
       {o.steps.map((s, i) => (
         <span key={i} className="rt-chip-wrap">
           {i > 0 && <span className="rc-sep">›</span>}
-          {s.kind === "walk"
-            ? <span className="rc"><Icon name="walk" />{s.floor} этаж</span>
-            : <span className={cx("rc", s.kind)} title={s.meta}><Icon name={s.kind} /></span>}
+          {s.leg.type === "city"
+            ? <span className="rc city" title={s.meta}><Icon name={s.kind} />{fmtDur(s.leg.time).replace("≈ ", "")}</span>
+            : s.kind === "walk"
+              ? <span className="rc"><Icon name="walk" />{s.floor} этаж</span>
+              : <span className={cx("rc", s.kind)} title={s.meta}><Icon name={s.kind} /></span>}
         </span>
       ))}
     </span>
@@ -128,8 +145,8 @@ export function RoutePanel() {
                   {o.steps.map((s, k) => (
                     <li key={k}><button className={cx(k === r.step && "on")} onClick={() => goStep(k)}>
                       <span className={cx("rs-ic", s.kind)}><Icon name={s.kind} /></span>
-                      <span className="rt-st"><b>{s.text}</b><small>{s.meta}</small></span>
-                    </button></li>
+                      {s.leg.type === "city" ? <CityText s={s} link={false} /> : <span className="rt-st"><b>{s.text}</b><small>{s.meta}</small></span>}
+                    </button>{s.leg.type === "city" && <div className="city-link-row"><MapsLink s={s} /></div>}</li>
                   ))}
                 </ol>
               )}
@@ -186,7 +203,7 @@ export function RouteSheet() {
       </div>
       <div className="rs-step">
         <span className={cx("rs-ic", s.kind)}><Icon name={s.kind} /></span>
-        <span className="rt-st"><b>{s.text}</b><small>{s.meta}</small></span>
+        {s.leg.type === "city" ? <CityText s={s} /> : <span className="rt-st"><b>{s.text}</b><small>{s.meta}</small></span>}
       </div>
       <div className="rs-actions">
         <button className="rs-prev" disabled={!r.step} onClick={() => goStep(r.step - 1)}>Назад</button>

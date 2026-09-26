@@ -36,7 +36,11 @@ export function initTelegram(onBack: () => void) {
   document.addEventListener("visibilitychange", () => { if (!document.hidden) expand(); });
   // иначе перетаскивание плана вниз сворачивает мини-апп
   if (tgAt("7.7")) tg.disableVerticalSwipes();
-  if (tgAt("6.1")) tg.BackButton.onClick(onBack);
+  if (tgAt("6.1")) {
+    tg.BackButton.onClick(onBack);
+    // «Назад» есть в шапке Telegram: свои кнопки возврата прячем
+    document.documentElement.classList.add("tg-back");
+  }
   // внешние ссылки открываем через Telegram, а не внутри мини-аппа
   document.addEventListener("click", (e) => {
     const a = (e.target as Element).closest?.('a[target="_blank"]') as HTMLAnchorElement | null;

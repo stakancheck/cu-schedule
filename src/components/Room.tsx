@@ -1,6 +1,6 @@
 /* Выбранная аудитория: карточка с занятостью, мини-карточка на плане (телефон),
    отдельный экран с расписанием аудитории */
-import { CAMPUSES, DAY_END, DAY_START, eventsOn, freeWindows, occupancy, roomCampus, roomFloor, roomStatus, type Status } from "../lib/schedule";
+import { CAMPUSES, dayRange, eventsOn, hourMarks, freeWindows, occupancy, roomCampus, roomFloor, roomStatus, type Status } from "../lib/schedule";
 import { useApp } from "../lib/store";
 import { closeRoomScreen, openRoomScreen, openRoute, selectRoom } from "../lib/actions";
 import { useAccountVersion } from "../lib/account";
@@ -16,9 +16,9 @@ export function statusText(st: Status) {
 export const StatusPill = ({ st }: { st: Status }) => <span className={cx("status-pill", st.st)}>{statusText(st)}</span>;
 const where = (room: string) => `${roomFloor[room]} этаж · ${CAMPUSES[roomCampus[room]].short}`;
 
-// Полоса дня 08-22: занятые интервалы и отметка времени плана
+// Полоса дня в часы работы кампуса: занятые интервалы и отметка времени плана
 export function Timeline({ room, date, t, scale = true }: { room: string; date: string; t: number; scale?: boolean }) {
-  const span = DAY_END - DAY_START;
+  const [DAY_START, DAY_END] = dayRange(roomCampus[room]), span = DAY_END - DAY_START;
   const pct = (m: number) => ((Math.min(DAY_END, Math.max(DAY_START, m)) - DAY_START) / span) * 100;
   return (
     <>
@@ -28,7 +28,7 @@ export function Timeline({ room, date, t, scale = true }: { room: string; date: 
         ))}
         {t >= DAY_START && t <= DAY_END && <div className="now" style={{ left: `${pct(t)}%` }} />}
       </div>
-      {scale && <div className="tl-scale">{["08", "10", "12", "14", "16", "18", "20", "22"].map((h) => <span key={h}>{h}</span>)}</div>}
+      {scale && <div className="tl-scale">{hourMarks(roomCampus[room]).filter((m) => m.label).map((m) => <span key={m.h}>{String(m.h).padStart(2, "0")}</span>)}</div>}
     </>
   );
 }

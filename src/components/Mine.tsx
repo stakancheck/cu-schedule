@@ -1,64 +1,21 @@
-/* Мои пары: вход по паролю приложения, список с отметками «приду / не приду» */
-import { useEffect, useState, type FormEvent } from "react";
+/* Мои пары: карточка подключения календаря, список с отметками «приду / не приду» */
+import { useEffect, useState } from "react";
 import { account, useAccountVersion, type Partstat } from "../lib/account";
 import { myEvents, type MyEv } from "../lib/mine";
-import { useApp, setState } from "../lib/store";
+import { useApp } from "../lib/store";
 import { openRoute, pickRoom, setMode, toast } from "../lib/actions";
 import { haptic } from "../lib/telegram";
 import { cx, dayFmt, fmt, iso, todayIso } from "../lib/util";
 import { evKind } from "../lib/schedule";
 import { Icon } from "./icons";
 import { Seg } from "./Seg";
+import { ConnectCard } from "./Connect";
 
 const PARTSTAT: [Partstat, string, string][] = [
   ["ACCEPTED", "Приду", "yes"],
   ["TENTATIVE", "Возможно", "maybe"],
   ["DECLINED", "Не приду", "no"],
 ];
-
-function LoginCard() {
-  useAccountVersion();
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const submit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const f = e.currentTarget, data = new FormData(f);
-    setBusy(true); setErr(null);
-    try {
-      await account.loginWithPassword(String(data.get("login")), String(data.get("password")));
-      haptic.ok();
-      setState({ mine: true });
-    } catch (x) {
-      const ex = x as { code?: string; message: string };
-      setErr(ex.code === "auth" ? "Яндекс не принял почту или пароль. Нужен именно пароль приложения для календаря." : ex.message);
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="login-card">
-      <div className="lc-top"><span className="lc-ic lc-violet"><Icon name="cal" /></span>
-        <div className="lc-text"><b>Мои пары</b><small>Из вашего Яндекс Календаря ЦУ</small></div></div>
-      <p>Только ваши пары с аудиториями на плане, ссылки на звонки и отметки «приду / не приду», как в календаре на телефоне.</p>
-      {account.error && <div className="form-error">{account.error}</div>}
-      <form className="login-form" autoComplete="on" onSubmit={submit}>
-        <label>Почта ЦУ<input name="login" type="email" inputMode="email" autoComplete="username" placeholder="i.ivanov@edu.centraluniversity.ru" required /></label>
-        <label>Пароль приложения<input name="password" type="password" autoComplete="current-password" placeholder="16 символов от Яндекса" required /></label>
-        {err && <div className="form-error">{err}</div>}
-        <button type="submit" className="primary-btn" disabled={busy}>{busy ? "Проверяю…" : "Войти"}</button>
-      </form>
-      <details className="howto">
-        <summary>Где взять пароль приложения</summary>
-        <ol>
-          <li>Откройте <a href="https://id.yandex.ru/security/app-passwords" target="_blank" rel="noopener">Яндекс ID → Пароли приложений</a>, войдите через аккаунт ЦУ.</li>
-          <li>Нажмите «Календарь» и назовите пароль, например «Расписание ЦУ».</li>
-          <li>Скопируйте пароль, который покажет Яндекс, и вставьте сюда.</li>
-        </ol>
-        <p>Отозвать доступ можно там же в любой момент.</p>
-      </details>
-      <p className="fine">Пароль приложения открывает только календарь. На устройстве хранится зашифрованный ключ сессии, пароль в открытом виде нигде не сохраняется.</p>
-    </div>
-  );
-}
 
 function syncLine() {
   if (account.syncing) return "Обновляю…";
@@ -161,7 +118,7 @@ function MineList() {
       </ol>
       <div className="account-line">
         <span>{account.user!.name || account.user!.email}</span>
-        <button onClick={() => { account.logout(); toast("Вы вышли. Пароль приложения можно отозвать в Яндекс ID"); }}>Выйти</button>
+        <button onClick={() => { account.logout(); toast("Календарь отключён. Пароль приложения можно отозвать в Яндекс ID"); }}>Выйти</button>
       </div>
     </div>
   );
@@ -180,5 +137,5 @@ export function MineBar() {
 
 export function MinePanel() {
   useAccountVersion();
-  return account.user ? <MineList /> : <LoginCard />;
+  return account.user ? <MineList /> : <ConnectCard />;
 }

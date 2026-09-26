@@ -5,7 +5,7 @@ import { setView } from "../lib/actions";
 import { cx } from "../lib/util";
 import { Icon, type IconName } from "./icons";
 
-const TABS: [View, string, IconName][] = [["plan", "План", "map"], ["list", "Расписание", "list"], ["info", "Полезное", "star"]];
+const TABS: [View, string, IconName][] = [["plan", "План", "map"], ["list", "Расписание", "list"], ["profile", "Профиль", "user"]];
 
 export function TabBar() {
   const view = useApp((s) => s.view);

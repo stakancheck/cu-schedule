@@ -1,10 +1,9 @@
-/* Дата и время плана. На телефоне даты листаются свайпом. */
+/* Дата расписания. На телефоне даты листаются свайпом. */
 import { useEffect, useRef, type RefObject } from "react";
 import { useApp, getState } from "../lib/store";
-import { goNow, setDate, setTime } from "../lib/actions";
+import { setDate } from "../lib/actions";
 import { haptic } from "../lib/telegram";
-import { DAY_END, DAY_START } from "../lib/schedule";
-import { addDays, cx, dayFmt, dowFmt, fmt, ghostFmt, isPhone, parseIso, todayIso } from "../lib/util";
+import { addDays, cx, dayFmt, dowFmt, ghostFmt, isPhone, parseIso, todayIso } from "../lib/util";
 import { Icon } from "./icons";
 
 const SWIPE_MIN = 56;
@@ -75,7 +74,7 @@ export function useSwipeDays(zone: RefObject<HTMLElement | null>, targets: () =>
 }
 
 export function SideHead() {
-  const date = useApp((s) => s.date), t = useApp((s) => s.t), live = useApp((s) => s.live);
+  const date = useApp((s) => s.date);
   const row = useRef<HTMLDivElement>(null);
   useSwipeDays(row, () => [row.current]);
   const d = parseIso(date), today = todayIso();
@@ -97,13 +96,6 @@ export function SideHead() {
         {([["Вчера", addDays(today, -1)], ["Сегодня", today], ["Завтра", addDays(today, 1)]] as const).map(([label, v]) => (
           <button key={label} className={cx(v === date && "on")} onClick={() => setDate(v)}>{label}</button>
         ))}
-      </div>
-      <div className="time-row">
-        <span className="time-lbl">План на</span>
-        <span className="time-val">{fmt(t)}</span>
-        <input type="range" min={DAY_START} max={DAY_END} step={5} value={Math.min(DAY_END, Math.max(DAY_START, t))}
-          onChange={(e) => setTime(+e.target.value)} />
-        <button className={cx("chip-btn", live && "on")} onClick={goNow}>Сейчас</button>
       </div>
     </div>
   );
