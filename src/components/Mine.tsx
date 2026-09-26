@@ -5,7 +5,7 @@ import { myEvents, type MyEv } from "../lib/mine";
 import { useApp } from "../lib/store";
 import { openRoute, pickRoom, setMode, toast } from "../lib/actions";
 import { haptic } from "../lib/telegram";
-import { cx, dayFmt, fmt, iso, todayIso } from "../lib/util";
+import { cx, dayFmt, fmt, iso, nowMin, todayIso } from "../lib/util";
 import { evKind } from "../lib/schedule";
 import { Icon } from "./icons";
 import { Seg } from "./Seg";
@@ -47,6 +47,9 @@ function MineItem({ e, t, isToday, hint, onMark, onSeries }: {
   const kind = e.type ? evKind(e.type) : "";
   const meta = [e.teachers, e.timetable ? "" : e.calendar].filter(Boolean).join(" · ");
   const busy = account.isPending(e.id);
+  // прошедшую пару не переотмечаем: сверяемся с настоящим временем, а не с выбранным на шкале
+  const today = todayIso();
+  const over = e.date < today || (e.date === today && e.e <= nowMin());
   return (
     <li className={cx("ev my", cls, e.partstat === "DECLINED" && "declined")}>
       {e.allDay ? <div className="t">весь<span>день</span></div> : <div className="t">{e.startHM}<span>{e.endHM}</span></div>}
@@ -68,9 +71,10 @@ function MineItem({ e, t, isToday, hint, onMark, onSeries }: {
             {e.url && <a className={cx("join", e.online && "primary")} href={e.url} target="_blank" rel="noopener"><Icon name="video" />{e.online ? "Подключиться" : "Звонок"}</a>}
             {e.known.length > 0 && <button className="join" onClick={() => openRoute({ to: "r:" + e.known[0] })}><Icon name="route" />Как пройти</button>}
             {e.partstat && (
-              <div className={cx("rsvp", busy && "busy")} role="group" aria-label="Присутствие">
+              <div className={cx("rsvp", busy && "busy", over && "over")} role="group" aria-label="Присутствие"
+                title={over ? "Пара уже прошла" : undefined}>
                 {PARTSTAT.map(([v, label, c]) => (
-                  <button key={v} className={cx(c, e.partstat === v && "on")} aria-pressed={e.partstat === v} disabled={busy}
+                  <button key={v} className={cx(c, e.partstat === v && "on")} aria-pressed={e.partstat === v} disabled={busy || over}
                     onClick={() => e.partstat !== v && onMark(v)}>{label}</button>
                 ))}
               </div>

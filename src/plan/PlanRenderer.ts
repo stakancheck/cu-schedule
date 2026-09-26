@@ -89,7 +89,7 @@ export class PlanRenderer {
   private insetAnim = 0;
   private drag: {
     x: number; y: number; moved: boolean; target: Element | null;
-    pinch?: number; ang?: number; twist?: number; turning?: boolean; // два пальца: расстояние, угол, накопленный поворот
+    pinch?: number; ang?: number; twist?: number; turning?: boolean; lag?: number; // два пальца: расстояние, угол, накопленный поворот, отставание плана от пальцев
     spin?: number;                                                    // Shift + мышь: угол указателя вокруг центра
   } | null = null;
   private pointers = new Map<number, [number, number]>();
@@ -584,17 +584,21 @@ export class PlanRenderer {
         const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
         this.zoomAt(dist / d.pinch, mx, my);
         d.pinch = dist;
-        // поворот включается, только когда пальцы заметно провернули: обычный щипок план не крутит
+        // поворот включается, только когда пальцы заметно провернули: обычный щипок план не крутит.
+        // Набранный до порога угол не прикладываем рывком, а догоняем за несколько движений
         const ang = angleOf(a, b);
         let da = wrap180(ang - d.ang!);
         d.ang = ang;
         if (!d.turning) {
           d.twist! += da;
-          if (Math.abs(d.twist!) < 14) return;
+          if (Math.abs(d.twist!) < 7) return;
           d.turning = true;
-          da = d.twist!;
+          d.lag = d.twist!;
+          da = 0;
         }
-        this.turnAround(this.viewAngle + da, mx, my);
+        const catchUp = d.lag! * 0.25;
+        d.lag! -= catchUp;
+        this.turnAround(this.viewAngle + da + catchUp, mx, my);
         return;
       }
       const dx = e.clientX - d.x, dy = e.clientY - d.y;
