@@ -11,6 +11,7 @@ import { Icon } from "./icons";
 import { RoomPeek } from "./Room";
 import { PlacePeek } from "./Place";
 import { SearchButton } from "./Search";
+import { filterFloors } from "../nav/filters";
 import { TimeIsland } from "./TimeIsland";
 import { PickBar, RouteSheet } from "./Route";
 
@@ -118,6 +119,9 @@ function PlanBar() {
   // этажи, по которым идёт выбранный маршрут
   const o = route.open && route.options ? route.options[route.sel] : null;
   const rtFloors = new Set(o ? o.steps.filter((s) => (s.campus || route.campus) === campusId && s.leg.type !== "city").map((s) => s.floor) : []);
+  // этажи, где есть подсвеченные места
+  const highlight = useApp((s) => s.highlight);
+  const hlFloors = new Set(filterFloors(campusId, highlight));
   const nums = floorNums(c);
   return (
     <header className="plan-bar">
@@ -126,7 +130,7 @@ function PlanBar() {
         <Seg value={campusId} onChange={setCampus} label="Кампус"
           items={Object.values(CAMPUSES).map((k) => ({ value: k.id, label: k.short }))} />
         <Seg value={floor} onChange={setFloor} label="Этаж" className={cx("floor-seg", nums.length > 4 && "many")}
-          items={nums.map((n) => ({ value: n, title: `${n} этаж`, className: rtFloors.has(n) ? "has-route" : "", label: <>{n}<span className="fl-w"> этаж</span></> }))} />
+          items={nums.map((n) => ({ value: n, title: `${n} этаж`, className: cx(rtFloors.has(n) && "has-route", hlFloors.has(n) && "has-hl"), label: <>{n}<span className="fl-w"> этаж</span></> }))} />
       </div>
       <div className="spacer" />
       <SearchButton />

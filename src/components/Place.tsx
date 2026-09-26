@@ -1,8 +1,8 @@
 /* Место без расписания (кухня, переговорная, туалет, лестница): что это и как дойти.
    На телефоне карточка поверх плана, на компьютере - правая колонка. */
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useApp } from "../lib/store";
-import { openRoute, selectPlace } from "../lib/actions";
+import { openRoute, revealSelection, selectPlace } from "../lib/actions";
 import { cx, norm } from "../lib/util";
 import { allPlaces, getPlace, placeWhere, type Place } from "../nav/places";
 import { CATS, placeInfo } from "../nav/info";
@@ -11,10 +11,11 @@ import { Icon } from "./icons";
 const CONTACT = "https://t.me/stakancheck";
 
 export function PlaceIcon({ p, className }: { p: Place; className?: string }) {
-  const i = placeInfo(p), c = CATS[i.cat];
+  const i = placeInfo(p), c = CATS[i.cat], brand = i.note?.brand;
+  if (brand) return <span className={cx("pl-ic", "pl-brand", className)} style={{ background: brand.color, color: brand.ink || "#fff" }}><Icon name={brand.icon} /></span>;
   return (
     <span className={cx("pl-ic", "tone-" + c.tone, className)}>
-      {i.note?.emoji ? <span className="pl-emoji">{i.note.emoji}</span> : <Icon name={p.kind === "link" && p.title === "Лифт" ? "lift" : c.icon} />}
+      {i.note?.emoji ? <span className="pl-emoji">{i.note.emoji}</span> : <Icon name={p.kind === "link" && /лифт/i.test(p.title) ? "lift" : c.icon} />}
     </span>
   );
 }
@@ -107,9 +108,12 @@ function RouteBtns({ p, className }: { p: Place; className: string }) {
 // Телефон: карточка выбранного места поверх плана
 export function PlacePeek() {
   const p = getPlace(useApp((s) => s.place));
+  const card = useRef<HTMLDivElement>(null);
+  // выбранное место не должно оказаться под карточкой
+  useLayoutEffect(() => { if (p) revealSelection(card.current); }, [p?.key]);
   if (!p) return null;
   return (
-    <div className="room-peek place-peek">
+    <div className="room-peek place-peek" ref={card}>
       <div className="pk-head">
         <PlaceIcon p={p} />
         <span className="pl-title"><b>{p.title}</b><span className="pk-where">{placeWhere(p)}</span></span>

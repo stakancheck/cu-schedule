@@ -320,7 +320,7 @@ const polyLen = (pts: Pt[]) => pts.reduce((s, p, i) => (i ? s + Math.hypot(p[0] 
 /* ============================================================ Связи */
 export function links(campusId: string): NavLink[] {
   const c = CAMPUSES[campusId];
-  return (NAV[campusId]?.links || []).filter((l) => !l.closed)
+  return (NAV[campusId]?.links || []).filter((l) => !l.closed && !l.service)
     .map((l) => ({ ...l, floors: Object.keys(l.at).map(Number).filter((n) => c.floors[n]).sort((a, b) => a - b) }))
     .filter((l) => l.floors.length > 1);
 }
@@ -403,11 +403,13 @@ export function plan(campusId: string, from: GoalPoint, to: GoalPoint | { points
     return s;
   };
 
-  // Этажи, где можно пересесть с одной связи на другую: концы связей
+  // Этажи, где можно пересесть с одной связи на другую: концы связей, а у связи, которая ходит
+  // не на все этажи подряд (лифт-экспресс Дуката: 1, 3, 7, 10), - все её остановки
   const lo = Math.min(from.floor, ...goalFloors), hi = Math.max(from.floor, ...goalFloors);
   const transfer = new Set<number>();
-  for (const l of ls) for (const n of [l.floors[0], l.floors[l.floors.length - 1]]) {
-    if (n >= lo && n <= hi) transfer.add(n);
+  for (const l of ls) {
+    const f = l.floors, gaps = f[f.length - 1] - f[0] !== f.length - 1;
+    for (const n of gaps ? f : [f[0], f[f.length - 1]]) if (n >= lo && n <= hi) transfer.add(n);
   }
 
   // Узлы: "S", "G@этаж", "связь@этаж"
@@ -435,7 +437,8 @@ export function plan(campusId: string, from: GoalPoint, to: GoalPoint | { points
     if (n === from.floor) continue;
     for (const [k, v] of pairs(grid(campusId, n), ls).d) {
       const [a, b] = k.split(">");
-      add(a + "@" + n, b + "@" + n, unitsToSec(v));
+      // +1 с: если другая связь стоит ровно на пути, не заходим к ней лишним шагом «пройдите до лифта»
+      add(a + "@" + n, b + "@" + n, unitsToSec(v) + 1);
     }
   }
   const rides: { a: string; b: string; w: number; kind: Kind }[] = [];

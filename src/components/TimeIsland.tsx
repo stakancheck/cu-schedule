@@ -1,7 +1,8 @@
 /* Занятость на плане: по умолчанию живое время, остров с датой, временем и легендой по кнопке */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useApp } from "../lib/store";
-import { goNow, planCtl, setDate, setTime } from "../lib/actions";
+import { goNow, planCtl, setDate, setHighlight, setTime } from "../lib/actions";
+import { FILTERS } from "../nav/filters";
 import { dayRange, hourMarks, occupancy, roomCampus, roomFloor, type CampusId } from "../lib/schedule";
 import { addDays, cx, dayFmt, dowFmt, fmt, ghostFmt, isPhone, nowMin, parseIso, todayIso } from "../lib/util";
 import { Icon } from "./icons";
@@ -105,6 +106,19 @@ function Timeline({ date, t, live }: { date: string; t: number; live: boolean })
   );
 }
 
+// Подсвеченные места одного типа: чип справа от плашки времени, крестик снимает подсветку
+function HighlightChip() {
+  const id = useApp((s) => s.highlight), f = id ? FILTERS[id] : null;
+  if (!f) return null;
+  return (
+    <div className="hl-chip">
+      <img src={import.meta.env.BASE_URL + "img/" + f.img + ".png"} alt="" />
+      <span>{f.title}</span>
+      <button className="hl-x" onClick={() => setHighlight(null)} title="Убрать подсветку" aria-label="Убрать подсветку"><Icon name="close" /></button>
+    </div>
+  );
+}
+
 export function TimeIsland() {
   const date = useApp((s) => s.date), t = useApp((s) => s.t), live = useApp((s) => s.live);
   const room = useApp((s) => s.room);
@@ -140,6 +154,7 @@ export function TimeIsland() {
 
   if (!open) {
     return (
+      <div className="tp-row">
       <div className={cx("time-pill", !live && "shifted")}>
         <button className="tp-main" onClick={() => setOpen(true)} title="Занятость в другое время">
           {/* часы и крестик всегда в разметке: при возврате к «сейчас» они плавно схлопываются */}
@@ -150,6 +165,8 @@ export function TimeIsland() {
         <button className="tp-x" onClick={goNow} title="Вернуться к текущему времени" tabIndex={live ? -1 : 0} aria-hidden={live}>
           <Icon name="close" />
         </button>
+      </div>
+      <HighlightChip />
       </div>
     );
   }

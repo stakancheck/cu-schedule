@@ -5,6 +5,7 @@ import { haptic } from "./telegram";
 import { isPhone, lsGet, lsSet, nowMin, OTHER_DAY_T, todayIso } from "./util";
 import { canStand, inPoly, plan as planRoute } from "../nav/engine";
 import { getPlace, mainEntrance, NEAREST, pointKey, type Place } from "../nav/places";
+import { filterFloors } from "../nav/filters";
 import { cityStep, stepsOf, type Option } from "../nav/steps";
 import { ADDRESS, cityLegs } from "../nav/city";
 import type { GoalPoint, RouteOption } from "../nav/engine";
@@ -21,6 +22,7 @@ export interface PlanControl {
   settle(): void;              // конец поворота рукой: доводка к прямому углу и сохранение
   zoomBy(k: number): void;
   setInset(px: number): void; // сколько пикселей снизу закрыто панелью: план поднимается над ней
+  reveal(b: Box, bottom: number): void; // область закрыта снизу на bottom пикселей: сдвинуть план, чтобы её было видно
 }
 export const planCtl: { current: PlanControl | null } = { current: null };
 // После смены состояния React перерисовывает экран в следующем кадре: камеру двигаем после него
@@ -83,12 +85,33 @@ export function selectPlace(key: string | null, focus = false) {
   });
 }
 
-// Аудитория из списка: выбрать, открыть план, приблизить
+// Аудитория из списка: выбрать, открыть план, приблизить (на телефоне - над её карточкой)
 export function pickRoom(room: string) {
   selectRoom(room);
   setState({ roomScreen: false });
   if (isPhone()) setView("plan");
-  afterPaint(() => planCtl.current?.focusRoom(room));
+  afterPaint(() => {
+    const r = CAMPUSES[roomCampus[room]].floors[roomFloor[room]].rooms.find((x) => x.id === room);
+    if (r?.pts.length) planCtl.current?.focusBox(bboxOf(r.pts), { bottom: sheetCover(".room-peek") });
+  });
+}
+
+// Выбранная аудитория или место на открытом этаже: контур помещения, иначе квадрат вокруг точки
+function selectionBox(): Box | null {
+  const s = getState(), p = getPlace(s.room ? "r:" + s.room : s.place);
+  if (!p || p.campus !== s.campus || p.floor !== s.floor) return null;
+  const r = p.room ? CAMPUSES[p.campus].floors[p.floor].rooms.find((x) => x.id === p.room) : null;
+  return r?.pts.length ? bboxOf(r.pts) : { x: p.x! - 30, y: p.y! - 30, width: 60, height: 60 };
+}
+
+// Карточка выбранного поверх плана (телефон): если она закрывает выбранное, план уезжает вверх.
+// Меряем по раскладке, а не по экрану: пока карточка въезжает, её рамка ещё сдвинута
+export function revealSelection(card: HTMLElement | null) {
+  const plan = document.getElementById("plan"), box = selectionBox();
+  if (!card || !card.offsetParent || !plan || !box) return;
+  const wrap = card.offsetParent as HTMLElement;
+  const gap = wrap.getBoundingClientRect().bottom - plan.getBoundingClientRect().bottom;
+  planCtl.current?.reveal(box, parseFloat(getComputedStyle(card).bottom) + card.offsetHeight - gap);
 }
 
 export const openRoomScreen = () => { if (getState().room) setState({ roomScreen: true }); };
@@ -99,6 +122,17 @@ export const closeFreeScreen = () => setState({ freeScreen: false });
 export const openGuide = (slide = 0) => { haptic.select(); setState({ guide: slide }); };
 
 export const openSearch = () => { haptic.select(); setState({ search: true }); };
+
+// Подсветить на плане места одного типа. Если на открытом этаже их нет - ближайший этаж, где есть
+export function setHighlight(id: string | null) {
+  if (!id) { setState({ highlight: null }); return; }
+  const s = getState(), floors = filterFloors(s.campus, id);
+  const floor = !floors.length || floors.includes(s.floor) ? s.floor
+    : floors.reduce((a, b) => (Math.abs(b - s.floor) < Math.abs(a - s.floor) ? b : a));
+  haptic.select();
+  setState({ highlight: id, floor, search: false });
+  if (isPhone()) setView("plan");
+}
 export const closeSearch = () => setState({ search: false });
 export const closeGuide = () => setState({ guide: null });
 

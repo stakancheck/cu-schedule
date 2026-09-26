@@ -11,7 +11,7 @@ export type Option = Omit<RouteOption, "legs"> & { legs: AnyLeg[]; steps: Step[]
 
 export const fmtDur = (s: number) => (s < 45 ? "меньше минуты" : `≈ ${Math.round(s / 60)} мин`);
 export const fmtLen = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(1).replace(".", ",")} км` : `${Math.max(5, Math.round(m / 5) * 5)} м`);
-const linkWord = (l: NavLink) => (l.kind === "lift" ? "лифта" : "лестницы") + (l.name ? " " + l.name : "");
+const linkWord = (l: NavLink) => (l.word ? l.word[1] : l.kind === "lift" ? "лифта" : "лестницы") + (l.name ? " " + l.name : "");
 
 function goalWord(b: Place, goal: RouteOption["goal"]) {
   if (b.kind === "nearest") return b.key === "n:wc" ? "туалета" : `«${goal.title}»`;
@@ -34,8 +34,9 @@ export function stepsOf(o: RouteOption, to: Place): Step[] {
     } else {
       const verb = leg.to > leg.from ? "Поднимитесь" : "Спуститесь";
       out.push({ leg, kind: leg.kind, floor: leg.to, title: `${leg.from} → ${leg.to} этаж`,
-        text: leg.kind === "lift" ? `${verb} на лифте на ${leg.to} этаж` : `${verb} по лестнице на ${leg.to} этаж`,
-        meta: [(leg.kind === "lift" ? "лифт" : "лестница") + (leg.link.name ? " " + leg.link.name : ""), fmtDur(leg.time)].join(" · ") });
+        text: leg.link.word ? `${verb} на ${leg.link.word[2]} на ${leg.to} этаж`
+          : leg.kind === "lift" ? `${verb} на лифте на ${leg.to} этаж` : `${verb} по лестнице на ${leg.to} этаж`,
+        meta: [(leg.link.word ? leg.link.word[0] : leg.kind === "lift" ? "лифт" : "лестница") + (leg.link.name ? " " + leg.link.name : ""), fmtDur(leg.time)].join(" · ") });
     }
   });
   return out;

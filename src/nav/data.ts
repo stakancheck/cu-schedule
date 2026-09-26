@@ -12,6 +12,9 @@
  *            начинается в одном месте, а выходит в другом.
  *   oneway   "up" | "down" - только в одну сторону (эскалаторы, выходы)
  *   closed   true - не использовать (ремонт, закрыто на ключ)
+ *   service  true - служебный (грузовой лифт): на плане есть, в маршрутах не используется, иконка приглушена
+ *   express  true - ходит не на все этажи (экспресс): иконка на плане выделена цветом
+ *   word     как называть, если не просто «лифт»: [«лифт-экспресс», «до лифта-экспресса», «на лифте-экспрессе»]
  *   note     пометка для себя, в интерфейс не попадает
  *
  * У Дуката этажи 4-9 в PDF сдвинуты относительно 1-3, поэтому точки
@@ -26,15 +29,40 @@ export interface Link {
   at: Record<number, Pt>;
   oneway?: "up" | "down";
   closed?: boolean;
+  service?: boolean;
+  express?: boolean;
+  word?: [string, string, string];
   note?: string;
 }
-export interface Entrance { id: string; name: string; sub?: string; floor: number; at: Pt }
+/* Кабина лифта на плане: середина кабины и чей это лифт. Иконка кабины открывает этот лифт,
+ * кабине без иконки в PDF (draw) иконку рисуем сами. */
+export interface Cab { link: string; floor: number; at: Pt; draw?: boolean }
+// tag - где подписать вход на плане, если в PDF подписи нет (подпись нажимается, как и остальные места)
+export interface Entrance { id: string; name: string; sub?: string; floor: number; at: Pt; tag?: Pt }
 export type Wc = [number, number, number, "f" | "m" | "a"];
 /* Дыры в полу, которых нет в PDF: { этаж: [прямоугольник [x0, y0, x1, y1], ...] }.
  * На плане рисуются как пустота с контуром стены, маршрут их обходит.
  * Накладываются на план при загрузке (lib/schedule.ts), сгенерированные файлы не трогаем. */
 export type Hole = [number, number, number, number];
-export interface CampusNav { metersPerUnit: number; links: Link[]; entrances: Entrance[]; wc: Wc[]; holes?: Record<number, Hole[]> }
+export interface CampusNav { metersPerUnit: number; links: Link[]; entrances: Entrance[]; wc: Wc[]; holes?: Record<number, Hole[]>; cabs?: Cab[] }
+
+/* Дукат: листы этажей сдвинуты относительно 1 этажа (по группе лифтов).
+ * Точки, снятые на 1 этаже, переносим на другие этажи этим сдвигом. */
+const DU_SHIFT: Record<number, Pt> = {
+  1: [0, 0], 2: [0, -2.5], 3: [0, -2.5], 4: [100, -2.5], 5: [100, 72.5], 6: [100, 72.5], 7: [100, 75], 8: [100, 72.5], 9: [100, 72.5],
+};
+const duAt = (n: number, [x, y]: Pt): Pt => [x + DU_SHIFT[n][0], y + DU_SHIFT[n][1]];
+const duFloors = (floors: number[], p: Pt) => Object.fromEntries(floors.map((n) => [n, duAt(n, p)])) as Record<number, Pt>;
+const DU_ALL = [1, 2, 3, 4, 5, 6, 7, 8, 9], DU_EXPRESS = [1, 3, 7];
+// Группа лифтов башни B: шесть кабин, два столбца по три (координаты 1 этажа, север сверху).
+// Слева снизу - грузовой, справа сверху - экспресс, остальные четыре - обычные.
+// У верхних кабин в PDF нет иконки.
+const DU_CABS: [string, Pt, boolean, number[]][] = [
+  ["du-lifts", [1445, 896.5], true, DU_ALL], ["du-lifts", [1445, 952.5], false, DU_ALL],
+  ["du-freight", [1445, 1025], false, DU_ALL],
+  ["du-express", [1667.5, 896.5], true, DU_EXPRESS],
+  ["du-lifts", [1667.5, 952.5], false, DU_ALL], ["du-lifts", [1667.5, 1025], false, DU_ALL],
+];
 
 export const NAV: Record<string, CampusNav> = {
   CT: {
@@ -107,15 +135,23 @@ export const NAV: Record<string, CampusNav> = {
           1: [2132.5, 1115], 2: [2132.5, 1112.5], 3: [2132.5, 1112.5], 4: [2232.5, 1112.5], 5: [2232.5, 1187.5],
           6: [2232.5, 1187.5], 7: [2232.5, 1187.5], 8: [2232.5, 1187.5], 9: [2232.5, 1187.5],
         } },
-      // По гайду кампуса: до всех этажей ездят четыре лифта из пяти, самый дальний (справа от входа)
-      // едет только на 1, 3, 7 и 10. На 1, 3 и 7 этажах точка - у общей группы лифтов,
-      // на плане 10 этажа нарисован один лифт, план сдвинут относительно 9 этажа.
-      { id: "du-10-lift", kind: "lift", name: "справа от входа, в конце ряда",
-        at: { 1: [1555, 988.8], 3: [1555, 986.2], 7: [1655, 1063.8], 10: [1921.7, 1310] },
+      // Экспресс: только 1, 3, 7 и 10 этажи, единственный лифт на 10. Точка - в холле перед кабиной
+      // (справа сверху в группе), на плане 10 этажа нарисован один лифт, план сдвинут относительно 9 этажа.
+      { id: "du-express", kind: "lift", express: true, word: ["лифт-экспресс", "лифта-экспресса", "лифте-экспрессе"], name: "справа в дальнем ряду",
+        at: { ...duFloors(DU_EXPRESS, [1600, 897]), 10: [1921.7, 1310] },
         note: "проверить на месте, есть ли на 10 этаж лестница" },
+      // Грузовой (слева снизу в группе): на плане отмечен, маршруты по нему не водим
+      { id: "du-freight", kind: "lift", word: ["грузовой лифт", "грузового лифта", "грузовом лифте"], name: "слева в ближнем ряду", service: true,
+        at: duFloors(DU_ALL, [1510, 1027]) },
+    ],
+    cabs: [
+      ...DU_CABS.flatMap(([link, at, draw, floors]) => floors.map((floor) => ({ link, floor, at: duAt(floor, at), draw }))),
+      { link: "du-express", floor: 10, at: [1921.7, 1310] },
     ],
     entrances: [
       { id: "du-main", name: "Главный вход", floor: 1, at: [1558.8, 1735] },
+      // северо-западный угол башни B, у стены поста охраны: открыт, когда главный закрыт
+      { id: "du-back", name: "Запасной вход", sub: "с тыльной стороны", floor: 1, at: [1318, 368], tag: [1288, 326] },
     ],
     wc: [
       [1, 1452.5, 760, "f"], [1, 1647.5, 760, "m"], [1, 1725, 695, "a"], [1, 1375, 695, "a"],

@@ -49,7 +49,8 @@ for (const c of Object.values(CAMPUSES)) {
         alias.set(key, rp.key);
         return;
       }
-      all.set(key, { key, kind: "poi", campus: c.id, floor: f.n, x: l.x, y: l.y, title: l.text, sub: "", food: FOOD.test(l.text), color: l.color });
+      // название из справочника (кафе «Дринкит»), подпись плана остаётся label: по ней работают правила
+      all.set(key, { key, kind: "poi", campus: c.id, floor: f.n, x: l.x, y: l.y, title: (NOTES[key] || NOTES[`${c.id} ${f.n} ${l.text}`])?.title || l.text, sub: "", food: FOOD.test(l.text), label: l.text, color: l.color });
     });
   }
   (NAV[c.id]?.wc || []).forEach(([floor, x, y, k], i) => {
@@ -62,14 +63,16 @@ for (const c of Object.values(CAMPUSES)) {
     const sub = [
       l.name,
       // подряд - диапазоном, с пропусками - списком (лифт Дуката на 1, 3, 7 и 10)
-      floors.length > 1 && (floors[floors.length - 1] - floors[0] === floors.length - 1
+      // у служебного лифта этажи по плану не проверены, не пишем их
+      !l.service && floors.length > 1 && (floors[floors.length - 1] - floors[0] === floors.length - 1
         ? `этажи ${floors[0]}–${floors[floors.length - 1]}` : `этажи ${floors.join(", ")}`),
       l.oneway && (l.oneway === "up" ? "только вверх" : "только вниз"),
       l.closed && (l.kind === "lift" ? "сейчас закрыт" : "сейчас закрыта"),
     ].filter(Boolean).join(", ");
     for (const n of floors) {
       const key = `l:${c.id}:${l.id}:${n}`;
-      all.set(key, { key, kind: "link", campus: c.id, floor: n, x: l.at[n][0], y: l.at[n][1], title: l.kind === "lift" ? "Лифт" : "Лестница", sub });
+      const title = l.word ? l.word[0][0].toUpperCase() + l.word[0].slice(1) : l.kind === "lift" ? "Лифт" : "Лестница";
+      all.set(key, { key, kind: "link", campus: c.id, floor: n, x: l.at[n][0], y: l.at[n][1], title, sub });
     }
   }
 }
@@ -100,6 +103,9 @@ export function iconPlace(cid: CampusId, n: number, x: number, y: number, kitche
     return best;
   };
   if (kitchen) return near((p) => (p.food ? 220 : undefined));
+  // кабина лифта из разметки: у каждой свой лифт (обычный, грузовой, экспресс)
+  const cab = NAV[cid]?.cabs?.find((b) => b.floor === n && Math.hypot(b.at[0] - x, b.at[1] - y) < 30);
+  if (cab) return getPlace(`l:${cid}:${cab.link}:${n}`) || null;
   return near((p) => ICON_REACH[p.kind]) || near((p) => (p.kind === "poi" ? 65 : undefined));
 }
 

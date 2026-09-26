@@ -9,6 +9,7 @@ import { fmt, isPhone, reduceMotion } from "../lib/util";
 import { debugImage, links } from "../nav/engine";
 import { getPlace, iconPlace, labelPlace } from "../nav/places";
 import { CATS, placeInfo } from "../nav/info";
+import { filterOn } from "../nav/filters";
 import { NAV } from "../nav/data";
 import { CITY_IC, RT_IC } from "../components/icons";
 import { ADDRESS } from "../nav/city";
@@ -80,6 +81,8 @@ export class PlanRenderer {
   private placeEls = new Map<string, Element[]>(); // места без расписания: заливка, подписи, иконки
   private selG: SVGGElement | null = null;
   private selMarks: Upright[] = [];
+  private hlG: SVGGElement | null = null;
+  private hlMarks: Upright[] = [];
   private routeG: SVGGElement | null = null;
   private routeTop: SVGGElement | null = null;
   private routeMarks: Upright[] = [];
@@ -116,6 +119,7 @@ export class PlanRenderer {
       settle: () => this.settle(),
       zoomBy: (k) => this.zoomAt(k),
       setInset: (px) => this.setInset(px),
+      reveal: (b, bottom) => this.reveal(b, bottom),
     };
     const onResize = () => this.applyTransform();
     window.addEventListener("resize", onResize);
@@ -150,6 +154,7 @@ export class PlanRenderer {
     }
     if (s.date !== prev.date || s.t !== prev.t || s.room !== prev.room) this.paintRooms();
     if (s.place !== prev.place) this.paintPlace();
+    if (s.highlight !== prev.highlight) this.paintHighlight();
     if (s.route !== prev.route) this.paintRoute();
   }
 
@@ -198,7 +203,25 @@ export class PlanRenderer {
     this.applyTransform();
     this.paintRooms();
     this.paintPlace();
+    this.paintHighlight();
     this.paintRoute();
+  }
+
+  // Подсвеченные места одного типа: их элементы выделены, над каждым метка одного размера на экране
+  private paintHighlight() {
+    if (!this.hlG) return;
+    this.svg.querySelectorAll(".hit.hl").forEach((e) => e.classList.remove("hl"));
+    this.hlG.textContent = "";
+    this.hlMarks = [];
+    const s = getState();
+    for (const p of filterOn(s.campus, s.floor, s.highlight)) {
+      for (const e of this.placeEls.get(p.key) || []) e.classList.add("hl");
+      const g = el("g", { class: "hl-mark" }, this.hlG);
+      el("circle", { class: "hl-pulse", r: 9 }, g);
+      el("circle", { class: "hl-dot", r: 6 }, g);
+      this.hlMarks.push({ g, x: p.x!, y: p.y! });
+    }
+    this.applyTransform();
   }
 
   // Элемент плана открывает место: помечаем его и запоминаем для подсветки
@@ -206,6 +229,13 @@ export class PlanRenderer {
     if (!key) return e;
     e.setAttribute("data-place", key);
     e.classList.add("hit");
+    // у сети свой цвет: подпись и значок кухни красим в него
+    const brand = placeInfo(getPlace(key)!).note?.brand;
+    if (brand) {
+      e.classList.add("brand");
+      (e as unknown as SVGElement).style.setProperty("--brand", brand.color);
+      if (brand.ink) (e as unknown as SVGElement).style.setProperty("--brand-ink", brand.ink);
+    }
     const list = this.placeEls.get(key);
     if (list) list.push(e); else this.placeEls.set(key, [e]);
     return e;
@@ -245,13 +275,31 @@ export class PlanRenderer {
     for (const p of floor.decorPaths || []) el("path", { class: "v-street", d: p.d, "fill-rule": eo(p) }, fg);
     for (const t of floor.decorTexts || []) this.streetText(fg, t);
 
+    // кабины лифтов из разметки: экспресс выделен, служебный приглушён
+    const cabs = (NAV[c.id]?.cabs || []).filter((b) => b.floor === floor.n);
+    const cabAt = (x: number, y: number) => cabs.find((b) => Math.hypot(b.at[0] - x, b.at[1] - y) < 30);
+    const cabCls = (b: { link: string } | undefined) => {
+      const l = b && NAV[c.id]!.links.find((x) => x.id === b.link);
+      return "vicon" + (l?.express ? " cab-express" : l?.service ? " cab-service" : "");
+    };
     for (const ic of floor.icons) {
       const g = this.upright(fg, ic.x, ic.y);
-      g.setAttribute("class", "vicon");
+      g.setAttribute("class", cabCls(cabAt(ic.x, ic.y)));
       for (const p of ic.parts) el("path", { class: "ic-" + p.c, d: p.d, "fill-rule": eo(p) }, g);
       // туалет, лестница, лифт, значок кухни: круг чуть больше иконки, чтобы попасть пальцем
       const pl = iconPlace(c.id, floor.n, ic.x, ic.y, ic.parts.some((p) => p.c === "kitchen"));
       if (pl) { el("circle", { class: "ic-hit", r: 17 }, g); this.asPlace(g, pl.key); }
+    }
+
+    // кабины лифтов без иконки в PDF: рисуем иконку соседней кабины
+    const liftIcon = floor.icons.find((ic) => cabAt(ic.x, ic.y));
+    for (const b of cabs) {
+      if (!b.draw || !liftIcon) continue;
+      const g = this.upright(fg, b.at[0], b.at[1]);
+      g.setAttribute("class", cabCls(b));
+      for (const p of liftIcon.parts) el("path", { class: "ic-" + p.c, d: p.d, "fill-rule": eo(p) }, g);
+      el("circle", { class: "ic-hit", r: 17 }, g);
+      this.asPlace(g, getPlace(`l:${c.id}:${b.link}:${floor.n}`)?.key);
     }
 
     floor.labels.forEach((l, i) => {
@@ -259,8 +307,9 @@ export class PlanRenderer {
       const g = l.vertical ? el("g", {}, fg) : this.upright(fg, l.x, l.y);
       if (l.vertical) this.streetLabels.push({ g, x: l.x, y: l.y, angle: -90 });
       const cls = isCowork(l) ? "tag-open" : TAG_CLS[l.color] || "";
-      const t = this.tag(g, l.text, { size: l.big ? 30 : 12, cls, padX: l.big ? 14 : 7 });
       const pl = labelPlace(c.id, floor.n, i);
+      // подпись из справочника, если место там переименовано («Кафе» -> «Дринкит»)
+      const t = this.tag(g, pl?.kind === "poi" ? pl.title : l.text, { size: l.big ? 30 : 12, cls, padX: l.big ? 14 : 7 });
       if (pl) this.asPlace(t, pl.key); else t.style.pointerEvents = "none";
     });
 
@@ -273,6 +322,13 @@ export class PlanRenderer {
         this.asPlace(tagEl, getPlace("r:" + r.id)?.key);
       }
     }
+    // входы, которых нет в подписях PDF (запасной вход Дуката)
+    for (const e of NAV[c.id]?.entrances || []) {
+      if (!e.tag || e.floor !== floor.n) continue;
+      const t = this.tag(this.upright(fg, e.tag[0], e.tag[1]), e.name, { size: 12, padX: 7 });
+      this.asPlace(t, getPlace("e:" + e.id)?.key);
+    }
+    this.hlG = el("g", { class: "place-hl" }, fg);
     this.selG = el("g", { class: "place-sel" }, fg);
     this.routeTop = el("g", { class: "route-top" }, fg);
     if (NAV_DEBUG) this.debugStops(fg, floor.n);
@@ -442,7 +498,9 @@ export class PlanRenderer {
     this.svg.setAttribute("viewBox", `${cx - w / 2} ${cy - h / 2} ${w} ${h}`);
     // метки маршрута одного размера на экране при любом масштабе
     this.svg.style.setProperty("--u", u.toFixed(3) + "px");
-    for (const l of [...this.routeMarks, ...this.selMarks]) l.g.setAttribute("transform", `translate(${l.x},${l.y}) rotate(${-a}) scale(${u.toFixed(3)})`);
+    // вблизи иконки и подписи видны сами: метки подсветки их бы закрывали
+    this.svg.classList.toggle("zoomed", this.zoom >= 2);
+    for (const l of [...this.routeMarks, ...this.selMarks, ...this.hlMarks]) l.g.setAttribute("transform", `translate(${l.x},${l.y}) rotate(${-a}) scale(${u.toFixed(3)})`);
     document.getElementById("dial")?.setAttribute("transform", `rotate(${a})`);
     document.getElementById("compassN")?.setAttribute("transform", `translate(0,-12) rotate(${-a})`);
     const off = Math.abs(a - Math.round(a / 360) * 360);
@@ -471,6 +529,35 @@ export class PlanRenderer {
       if (id !== this.insetAnim) return;
       const k = dur ? Math.min(1, (now - t0) / dur) : 1;
       this.inset = from + (px - from) * (1 - Math.pow(1 - k, 3));
+      this.applyTransform();
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  // Область закрыта снизу на bottom пикселей: поднимаем план ровно настолько, чтобы её было видно
+  // (с запасом), но не заводим её верх под кнопки сверху. Уже видна - план не трогаем.
+  reveal(b: Box, bottom: number) {
+    const m = this.world.getScreenCTM();
+    if (!m) return;
+    const ys = [[b.x, b.y], [b.x + b.width, b.y], [b.x, b.y + b.height], [b.x + b.width, b.y + b.height]].map(([x, y]) => {
+      const p = this.svg.createSVGPoint();
+      p.x = x; p.y = y;
+      return p.matrixTransform(m).y;
+    });
+    const top = Math.min(...ys), bot = Math.max(...ys);
+    const r = this.svg.getBoundingClientRect(), MARGIN = 16;
+    const limit = r.bottom - bottom - MARGIN, ceil = r.top + 64 + MARGIN;
+    if (bot <= limit) return;
+    // не выше полосы с кнопками; если область больше просвета, ставим её посередине просвета
+    const d = Math.min(bot - limit, Math.max(0, top - ceil)) || (top + bot) / 2 - (ceil + limit) / 2;
+    if (d <= 0) return;
+    const u = this.baseUpp(this.viewAngle) / this.zoom, from = this.pan[1], to = from + d * u;
+    const t0 = performance.now(), dur = reduceMotion() ? 0 : 320, id = ++this.focusAnim;
+    const step = (now: number) => {
+      if (id !== this.focusAnim) return;
+      const k = dur ? Math.min(1, (now - t0) / dur) : 1;
+      this.pan[1] = from + (to - from) * (1 - Math.pow(1 - k, 3));
       this.applyTransform();
       if (k < 1) requestAnimationFrame(step);
     };

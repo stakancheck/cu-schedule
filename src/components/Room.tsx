@@ -2,12 +2,27 @@
    отдельный экран с расписанием аудитории */
 import { CAMPUSES, dayRange, eventsOn, hourMarks, freeWindows, occupancy, roomCampus, roomFloor, roomStatus, type Status } from "../lib/schedule";
 import { useApp } from "../lib/store";
-import { closeRoomScreen, openRoomScreen, openRoute, selectRoom } from "../lib/actions";
+import { useLayoutEffect, useRef } from "react";
+import { closeRoomScreen, openRoomScreen, openRoute, revealSelection, selectRoom } from "../lib/actions";
 import { useAccountVersion } from "../lib/account";
 import { myRooms } from "../lib/mine";
 import { cx, fmt, isPhone } from "../lib/util";
 import { DataStamp, EventList, EventRow, NoData, outOfRange } from "./Events";
 import { Icon } from "./icons";
+import { placeInfo } from "../nav/info";
+import { getPlace } from "../nav/places";
+
+// Описание аудитории из справочника (nav/info.ts), если оно там есть: «спортзал, можно в теннис»
+function RoomAbout({ room }: { room: string }) {
+  const p = getPlace("r:" + room), i = p && placeInfo(p);
+  if (!i?.own) return null;
+  return (
+    <div className="room-about">
+      {i.about && <p>{i.about}</p>}
+      {!!i.note?.facts?.length && <ul>{i.note.facts.map((f, k) => <li key={k}>{f}</li>)}</ul>}
+    </div>
+  );
+}
 
 export function statusText(st: Status) {
   if (st.st === "busy") return `Занята до ${fmt(st.until!)}`;
@@ -72,6 +87,9 @@ export function RoomCard({ room, onClose }: { room: string; onClose?: () => void
 export function RoomPeek() {
   const room = useApp((s) => s.room), date = useApp((s) => s.date), t = useApp((s) => s.t);
   const my = useMyPair(room || "", date, t);
+  const card = useRef<HTMLDivElement>(null);
+  // выбрали на плане аудиторию у нижнего края - карточка не должна её закрыть
+  useLayoutEffect(() => { if (room) revealSelection(card.current); }, [room]);
   if (!room) return null;
   const st = roomStatus(room, date, t);
   const evs = eventsOn(date).filter((e) => e.rooms.includes(room));
@@ -80,13 +98,14 @@ export function RoomPeek() {
   const shown = cur || next;
   const left = evs.filter((e) => e.e > t).length;
   return (
-    <div className="room-peek">
+    <div className="room-peek" ref={card}>
       <div className="pk-head">
         <b>{room}</b>
         <span className="pk-where">{where(room)}</span>
         <StatusPill st={st} />
         <button className="pk-x" onClick={() => selectRoom(null)} title="Сбросить выбор"><Icon name="close" /></button>
       </div>
+      <RoomAbout room={room} />
       {outOfRange(date) ? <p className="pk-empty">На эту дату расписания нет</p> : shown ? (
         <div className="pk-ev">
           <div className="pk-label">{cur ? "Сейчас" : `Дальше в ${shown.start}`}{left > 1 ? ` · потом ещё ${left - 1}` : ""}</div>
@@ -120,6 +139,7 @@ export function RoomScreen() {
         <h2>Аудитория {room}</h2>
       </div>
       <RoomCard room={room} />
+      <RoomAbout room={room} />
       {my && <div className="pk-my room-my">Ваша пара {my.startHM}–{my.endHM} · {my.title}</div>}
       <div className="list-head"><h2>Пары · {evs.length}</h2></div>
       {outOfRange(date) ? <NoData /> : <EventList evs={evs} t={t} room={room} empty="В этот день пар в аудитории нет, она свободна" />}

@@ -4,6 +4,7 @@ import { CAMPUSES, defaultFloor, roomCampus, roomFloor, type CampusId } from "./
 import { fmt, lsGet, nowMin, OTHER_DAY_T, toMin, todayIso } from "./util";
 import { account } from "./account";
 import { getPlace } from "../nav/places";
+import { FILTERS } from "../nav/filters";
 import type { Option } from "../nav/steps";
 
 export type View = "plan" | "list" | "profile";
@@ -41,6 +42,7 @@ export interface AppState {
   toast: { text: string; id: number } | null;
   guide: number | null;      // инструкция подключения календаря: открытый слайд или null
   search: boolean;           // открыт общий поиск
+  highlight: string | null;  // подсвеченные на плане места одного типа (ключ из nav/filters): туалеты, где поесть
 }
 
 export const emptyRoute: RouteState = {
@@ -52,7 +54,7 @@ function initialState(): AppState {
     campus: "CT", floor: 3, date: todayIso(), t: nowMin(), live: true,
     room: null, place: null, roomScreen: false, freeScreen: false, angle: 0, view: "plan",
     mine: account.enabled && (lsGet("cu.mode") ? lsGet("cu.mode") === "mine" : !!account.user),
-    query: "", showPast: false, route: emptyRoute, toast: null, guide: null, search: false,
+    query: "", showPast: false, route: emptyRoute, toast: null, guide: null, search: false, highlight: null,
   };
   const h = new URLSearchParams(location.hash.slice(1));
   const c = h.get("c");
@@ -69,6 +71,8 @@ function initialState(): AppState {
     s.roomScreen = h.get("v") === "room";
   }
   const pl = getPlace(h.get("pl"));
+  const hl = h.get("hl");
+  if (hl && FILTERS[hl]) s.highlight = hl;
   if (!s.room && pl && pl.kind !== "point" && pl.campus && CAMPUSES[pl.campus]?.floors[pl.floor!]) {
     s.place = pl.key;
     s.campus = pl.campus;
@@ -121,6 +125,7 @@ function writeHash(s: AppState) {
   if (!s.live) h.set("t", fmt(s.t));
   if (s.room) h.set("r", s.room);
   if (s.place) h.set("pl", s.place);
+  if (s.highlight) h.set("hl", s.highlight);
   const rot = ((Math.round(s.angle) % 360) + 360) % 360;
   if (rot) h.set("rot", String(rot));
   if (s.roomScreen && s.room) h.set("v", "room");

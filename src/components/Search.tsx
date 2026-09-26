@@ -4,7 +4,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { byDate, CAMPUSES, eventsOn, evKind, roomCampus, roomFloor, roomStatus, type Ev } from "../lib/schedule";
 import { getState, setState, useApp } from "../lib/store";
-import { closeSearch, openRoute, openSearch, pickRoom, selectPlace, setView, showEvent } from "../lib/actions";
+import { closeSearch, openRoute, openSearch, pickRoom, selectPlace, setHighlight, setView, showEvent } from "../lib/actions";
 import { addDays, cx, isPhone, lsGet, lsSet, norm, nowMin, parseIso, todayIso } from "../lib/util";
 import { allPlaces, getPlace, normQuery, placeWhere, type Place } from "../nav/places";
 import { infoText } from "../nav/info";
@@ -12,7 +12,8 @@ import { PlaceIcon } from "./Place";
 import { statusText } from "./Room";
 import { Icon, type IconName } from "./icons";
 
-const FLAG = import.meta.env.BASE_URL + "img/free-rooms-flag.png";
+// объёмные картинки быстрых действий; путь от base: на Pages сайт живёт в подпапке
+const IMG = (name: string) => import.meta.env.BASE_URL + "img/" + name + ".png";
 const AHEAD = 21; // пары преподавателя или предмета - на три недели вперёд
 
 /* ---------- индекс: кто и что есть в расписании */
@@ -102,20 +103,19 @@ function openFree() {
   setState({ freeScreen: true, mine: false, room: null, place: null, roomScreen: false });
   if (isPhone()) setView("list");
 }
-// ближайшее - от выбранной аудитории или места, иначе от входа
-const fromHere = () => { const s = getState(); return s.room ? "r:" + s.room : s.place; };
-interface Quick { id: string; title: string; sub: string; icon: IconName | "flag"; tone: string; words: string; run?: () => void; query?: string }
+// run - действие; места одного типа (туалеты, поесть) не ведут маршрутом, а подсвечиваются на плане
+interface Quick { id: string; title: string; sub: string; img: string; words: string; run: () => void }
 const QUICK: Quick[] = [
-  { id: "wc", title: "Туалет", sub: "ближайший, с маршрутом", icon: "wc", tone: "gray", words: "туалет wc уборная", run: () => openRoute({ from: fromHere(), to: "n:wc" }) },
-  { id: "food", title: "Поесть", sub: "ближайшая кухня или кафе", icon: "cup", tone: "kitchen", words: "поесть еда кухня кафе обед кофе столовая перекус", run: () => openRoute({ from: fromHere(), to: "n:food" }) },
-  { id: "free", title: "Свободные аудитории", sub: "где сесть позаниматься", icon: "flag", tone: "free", words: "свободные аудитории пустые свободно позаниматься", run: openFree },
-  { id: "cowork", title: "Коворкинг", sub: "открытые места для учёбы", icon: "desk", tone: "open", words: "коворкинг опенспейс позаниматься", query: "Коворкинг" },
-  { id: "cloak", title: "Гардероб", sub: "куда сдать куртку", icon: "door", tone: "gray", words: "гардероб куртка одежда", query: "Гардероб" },
-  { id: "route", title: "Маршрут", sub: "откуда и куда угодно", icon: "route", tone: "accent", words: "маршрут как пройти дорога добраться", run: () => openRoute() },
+  { id: "wc", title: "Туалет", sub: "все туалеты на плане", img: "quick-wc", words: "туалет wc уборная", run: () => setHighlight("wc") },
+  { id: "food", title: "Поесть", sub: "кухни и кафе на плане", img: "quick-food", words: "поесть еда кухня кафе обед кофе столовая перекус", run: () => setHighlight("food") },
+  { id: "free", title: "Свободные аудитории", sub: "где сесть позаниматься", img: "free-rooms-flag", words: "свободные аудитории пустые свободно позаниматься", run: openFree },
+  { id: "cowork", title: "Коворкинг", sub: "открытые места для учёбы", img: "quick-cowork", words: "коворкинг опенспейс позаниматься", run: () => setHighlight("cowork") },
+  { id: "cloak", title: "Гардероб", sub: "куда сдать куртку", img: "quick-cloak", words: "гардероб куртка одежда", run: () => setHighlight("cloak") },
+  { id: "route", title: "Маршрут", sub: "откуда и куда угодно", img: "quick-route", words: "маршрут как пройти дорога добраться", run: () => openRoute() },
 ];
 
 function QuickIcon({ q }: { q: Quick }) {
-  return <span className={cx("pl-ic", "tone-" + q.tone)}>{q.icon === "flag" ? <img src={FLAG} alt="" /> : <Icon name={q.icon} />}</span>;
+  return <img className="sr-qimg" src={IMG(q.img)} alt="" />;
 }
 
 /* ---------- результаты */
@@ -155,15 +155,15 @@ function search(query: string, open: (who: Who, v: string) => void, expanded: Se
     groups.push({ id, title, items: all.slice(0, n), more: all.length - n });
   };
 
-  const quick = QUICK.filter((x) => x.run && x.words.split(" ").some((w) => w.startsWith(q) || (q.length > 3 && q.startsWith(w))));
-  add("quick", "Быстро", quick.map((x) => ({ id: "q:" + x.id, icon: <QuickIcon q={x} />, title: x.title, sub: x.sub, run: x.run! })), 3);
+  const quick = QUICK.filter((x) => x.words.split(" ").some((w) => w.startsWith(q) || (q.length > 3 && q.startsWith(w))));
+  add("quick", "Быстро", quick.map((x) => ({ id: "q:" + x.id, icon: <QuickIcon q={x} />, title: x.title, sub: x.sub, run: x.run })), 3);
 
   const rooms: { p: Place; s: number }[] = [], places: { p: Place; s: number }[] = [];
   const seen = new Set<string>();
   for (const p of allPlaces()) {
     if (p.kind === "point" || p.kind === "nearest") continue;
     let s = Math.min(...[p.title, p.sub, p.label || ""].map((x) => score(x, q)).map((x) => (x < 0 ? 99 : x)));
-    if (s === 99 && p.kind !== "room") s = score(infoText(p), q) >= 0 ? 4 : 99;
+    if (s === 99) s = score(infoText(p), q) >= 0 ? 4 : 99;
     if (s === 99) continue;
     // одинаковые подписи без кода на этаже («Кухня», «Мужской туалет») - один раз
     const k = p.title + p.sub + p.floor + p.campus;
@@ -305,7 +305,7 @@ function SearchPanel() {
       <>
         <div className="sr-quick">
           {QUICK.map((x) => (
-            <button key={x.id} onClick={() => { if (x.query) setQuery(x.query); else { closeSearch(); x.run!(); } }}>
+            <button key={x.id} onClick={() => { closeSearch(); x.run(); }}>
               <QuickIcon q={x} />
               <b>{x.title}</b>
               <small>{x.sub}</small>

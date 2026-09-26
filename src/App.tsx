@@ -3,7 +3,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 import { getState, initialRoute, setState, useApp } from "./lib/store";
 import {
   closeFreeScreen, closeGuide, closeRoomScreen, closeSearch, goStep, openRoute, openSearch, planCtl, routeBack, selectPlace, selectRoom, setDate,
-  setFloor, setView, tick,
+  setFloor, setHighlight, setView, tick,
 } from "./lib/actions";
 import { account } from "./lib/account";
 import { CAMPUSES } from "./lib/schedule";
@@ -34,6 +34,7 @@ function back() {
   else if (s.route.open) routeBack();
   else if (s.roomScreen) closeRoomScreen();
   else if (s.place) selectPlace(null);
+  else if (s.highlight && !s.room) setHighlight(null);
   else if (s.freeScreen && (s.view === "list" || !phoneMq.matches)) closeFreeScreen();
   else if (s.view !== "plan" && phoneMq.matches) setView("plan");
   else selectRoom(null);
@@ -81,7 +82,7 @@ function useKeys() {
 export function App() {
   const view = useApp((s) => s.view), mine = useApp((s) => s.mine);
   const room = useApp((s) => s.room), roomScreen = useApp((s) => s.roomScreen), freeScreen = useApp((s) => s.freeScreen);
-  const place = useApp((s) => s.place), search = useApp((s) => s.search);
+  const place = useApp((s) => s.place), search = useApp((s) => s.search), highlight = useApp((s) => s.highlight);
   const guide = useApp((s) => s.guide !== null);
   const routeOpen = useApp((s) => s.route.open), step = useApp((s) => s.route.step), picking = useApp((s) => s.route.picking);
   const phone = usePhone();
@@ -119,8 +120,8 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    setTgBackButton(search || guide || !!room || !!place || (phone && view !== "plan") || routeOpen || roomScreen || freeMode);
-  }, [search, guide, room, place, phone, view, routeOpen, roomScreen, freeMode]);
+    setTgBackButton(search || guide || !!room || !!place || !!highlight || (phone && view !== "plan") || routeOpen || roomScreen || freeMode);
+  }, [search, guide, room, place, highlight, phone, view, routeOpen, roomScreen, freeMode]);
 
   // новая вкладка или экран открываются сверху
   useEffect(() => { if (body.current) body.current.scrollTop = 0; }, [view, roomMode, placeMode, place, routeOpen, freeMode]);
