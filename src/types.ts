@@ -66,8 +66,10 @@ interface TgWebApp {
   platform: string;
   colorScheme: "light" | "dark";
   isExpanded: boolean;
+  isFullscreen?: boolean;
   isVersionAtLeast(v: string): boolean;
   expand(): void;
+  requestFullscreen(): void;
   ready(): void;
   onEvent(name: string, fn: (e?: { isStateStable?: boolean }) => void): void;
   disableVerticalSwipes(): void;

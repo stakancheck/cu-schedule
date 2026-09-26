@@ -44,6 +44,8 @@
 
   --radius: 12px;
   --radius-s: 8px;
+  /* подложка под прозрачный статус-бар веб-аппа: его текст всегда белый */
+  --status-scrim: linear-gradient(rgba(0, 0, 0, .6), rgba(0, 0, 0, .4) 60%, transparent);
   color-scheme: light;
 }
 
@@ -92,6 +94,7 @@
   --b-lec: #b8b1ff;
   --b-sem: #8dedf9;
   --b-ctrl: #ffa171;
+  --status-scrim: none;
     color-scheme: dark;
   }
 }
@@ -138,6 +141,7 @@
   --b-lec: #b8b1ff;
   --b-sem: #8dedf9;
   --b-ctrl: #ffa171;
+  --status-scrim: none;
   color-scheme: dark;
 }
 
@@ -1258,14 +1262,23 @@ button.join { background: transparent; }
   body { background: var(--panel); }
   /* Экран = одна вкладка без карточек-островков: блоки встык на всю ширину,
      прокрутка внутри вкладки, меню плавает поверх */
+  /* Экран - через fixed, а не 100dvh: на iOS dvh бывает выше видимой области
+     (веб-апп с домашнего экрана, Safari 26 с нижней панелью), и кнопки плана уезжают
+     под меню, которое прибито к низу окна. В Telegram высоту задаёт сам Telegram. */
   .app {
     display: flex; flex-direction: column;
-    height: var(--app-h);
-    padding: var(--safe-top) var(--safe-right) 0 var(--safe-left);
+    position: fixed; inset: 0; height: auto;
+    padding: 0 var(--safe-right) 0 var(--safe-left);
     gap: 0;
   }
+  .tma .app { bottom: auto; height: var(--app-h); }
   .side, .plan-pane { border: 0; border-radius: 0; background: transparent; }
-  .side { order: -1; flex: 1; min-height: 0; }
+  /* отступ сверху только у списков: план уходит под статус-бар, кнопки над ним сдвинуты */
+  .side { order: -1; flex: 1; min-height: 0; padding-top: var(--safe-top); }
+  .standalone body::before {
+    content: ""; position: fixed; z-index: 40; top: 0; left: 0; right: 0;
+    height: var(--safe-top); background: var(--status-scrim); pointer-events: none;
+  }
   /* нижний отступ под плавающее меню, иначе конец списка прячется под ним */
   .side-body {
     overflow: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y;
@@ -1308,7 +1321,7 @@ button.join { background: transparent; }
   .plan-bar .spacer, .floor-title, #themeBtn { display: none; }
   .nav-col {
     display: flex; align-items: flex-start; gap: 8px;
-    position: absolute; z-index: 3; top: 8px; left: 8px; right: 8px;
+    position: absolute; z-index: 3; top: calc(8px + var(--safe-top)); left: 8px; right: 8px;
   }
   .nav-col .seg, .map-ctl .compass, .zoom-ctl {
     background: color-mix(in srgb, var(--panel) 55%, transparent);
@@ -1324,7 +1337,7 @@ button.join { background: transparent; }
   .nav-col .floor-seg::-webkit-scrollbar { display: none; }
   .nav-col .floor-seg button { flex: none; }
   .map-ctl { display: contents; }
-  .map-ctl .compass { position: absolute; z-index: 3; top: 58px; right: 8px; width: 38px; height: 38px; }
+  .map-ctl .compass { position: absolute; z-index: 3; top: calc(58px + var(--safe-top)); right: 8px; width: 38px; height: 38px; }
   /* как в картах: компас появляется, только когда план повёрнут */
   .plan-pane:not(.turned) .map-ctl .compass { opacity: 0; scale: .6; pointer-events: none; }
   /* масштаб - столбиком над кнопкой маршрута, по её ширине */

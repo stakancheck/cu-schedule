@@ -34,6 +34,9 @@ export function initTelegram(onBack: () => void) {
   tg.onEvent("viewportChanged", (e) => { if (!e || e.isStateStable) expand(); });
   if (tgAt("8.0")) tg.onEvent("activated", expand);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) expand(); });
+  // На телефоне - во весь экран: план уходит под статус-бар и кнопки Telegram,
+  // отступы для них приходят в --tg-safe-area-* и --tg-content-safe-area-*
+  if (tgAt("8.0") && /^(ios|android)/.test(tg.platform) && !tg.isFullscreen) tg.requestFullscreen();
   // иначе перетаскивание плана вниз сворачивает мини-апп
   if (tgAt("7.7")) tg.disableVerticalSwipes();
   if (tgAt("6.1")) {
