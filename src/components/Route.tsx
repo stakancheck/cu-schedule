@@ -15,6 +15,7 @@ function sgIcon(p: Place) {
   if (p.kind === "room") return p.title.replace(/\d.*/, "") || "·";
   if (p.kind === "entrance") return "→";
   if (p.kind === "nearest") return p.key === "n:wc" ? "WC" : "☕";
+  if (p.kind === "wc") return "WC";
   return "•";
 }
 

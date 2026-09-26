@@ -9,6 +9,8 @@ import { PlanRenderer } from "../plan/PlanRenderer";
 import { Seg } from "./Seg";
 import { Icon } from "./icons";
 import { RoomPeek } from "./Room";
+import { PlacePeek } from "./Place";
+import { SearchButton } from "./Search";
 import { TimeIsland } from "./TimeIsland";
 import { PickBar, RouteSheet } from "./Route";
 
@@ -127,6 +129,7 @@ function PlanBar() {
           items={nums.map((n) => ({ value: n, title: `${n} этаж`, className: rtFloors.has(n) ? "has-route" : "", label: <>{n}<span className="fl-w"> этаж</span></> }))} />
       </div>
       <div className="spacer" />
+      <SearchButton />
       <ThemeButton />
       <div className="floor-title">
         <div className="floor-n">Этаж {floor}</div>
@@ -163,6 +166,7 @@ function PlanView() {
       <MapControls />
       <TimeIsland />
       {!routeOpen && <RoomPeek />}
+      {!routeOpen && <PlacePeek />}
       {!routeOpen && (
         <button className="route-fab" title="Построить маршрут" onClick={() => openRoute()}>
           <Icon name="route" /><span>Маршрут</span>

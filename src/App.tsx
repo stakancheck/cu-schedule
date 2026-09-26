@@ -2,7 +2,8 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { getState, initialRoute, setState, useApp } from "./lib/store";
 import {
-  closeFreeScreen, closeGuide, closeRoomScreen, goStep, openRoute, planCtl, routeBack, selectRoom, setDate, setFloor, setView, tick,
+  closeFreeScreen, closeGuide, closeRoomScreen, closeSearch, goStep, openRoute, openSearch, planCtl, routeBack, selectPlace, selectRoom, setDate,
+  setFloor, setView, tick,
 } from "./lib/actions";
 import { account } from "./lib/account";
 import { CAMPUSES } from "./lib/schedule";
@@ -13,6 +14,8 @@ import { SideHead, useSwipeDays } from "./components/SideHead";
 import { AllSchedule, FreeScreen } from "./components/Events";
 import { MineBar, MinePanel } from "./components/Mine";
 import { RoomScreen } from "./components/Room";
+import { PlaceScreen } from "./components/Place";
+import { SearchLayer } from "./components/Search";
 import { RoutePanel } from "./components/Route";
 import { TabBar, Toast, Useful } from "./components/Chrome";
 import { ConnectGuide, Profile } from "./components/Connect";
@@ -26,9 +29,11 @@ const usePhone = () => useSyncExternalStore(
 // Системная «Назад» в Telegram и Esc: закрываем то, что открыто поверх
 function back() {
   const s = getState();
-  if (s.guide !== null) closeGuide();
+  if (s.search) closeSearch();
+  else if (s.guide !== null) closeGuide();
   else if (s.route.open) routeBack();
   else if (s.roomScreen) closeRoomScreen();
+  else if (s.place) selectPlace(null);
   else if (s.freeScreen && (s.view === "list" || !phoneMq.matches)) closeFreeScreen();
   else if (s.view !== "plan" && phoneMq.matches) setView("plan");
   else selectRoom(null);
@@ -43,7 +48,15 @@ function useKeys() {
     };
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
+      // поиск: Ctrl/⌘ K откуда угодно, «/» вне полей ввода; пока он открыт, клавиши - его
+      if ((e.metaKey || e.ctrlKey) && e.code === "KeyK") {
+        e.preventDefault();
+        if (getState().search) closeSearch(); else openSearch();
+        return;
+      }
+      if (getState().search) return;
       if (t.tagName === "INPUT" || t.getAttribute("role") === "slider") { if (e.key === "Escape") t.blur(); return; }
+      if (e.key === "/") { e.preventDefault(); openSearch(); return; }
       const s = getState();
       // инструкция поверх всего: стрелки листают её слайды
       if (s.guide !== null) { if (e.key === "Escape") back(); return; }
@@ -68,6 +81,7 @@ function useKeys() {
 export function App() {
   const view = useApp((s) => s.view), mine = useApp((s) => s.mine);
   const room = useApp((s) => s.room), roomScreen = useApp((s) => s.roomScreen), freeScreen = useApp((s) => s.freeScreen);
+  const place = useApp((s) => s.place), search = useApp((s) => s.search);
   const guide = useApp((s) => s.guide !== null);
   const routeOpen = useApp((s) => s.route.open), step = useApp((s) => s.route.step), picking = useApp((s) => s.route.picking);
   const phone = usePhone();
@@ -75,8 +89,10 @@ export function App() {
 
   // на телефоне расписание аудитории - отдельный экран, на компьютере - правая колонка
   const roomMode = phone ? roomScreen && !!room : !!room;
+  // место без расписания: на телефоне карточка поверх плана, на компьютере правая колонка
+  const placeMode = !phone && !!place;
   // свободные аудитории - отдельный экран вкладки «Расписание» (только для списка всех пар)
-  const freeMode = freeScreen && !roomMode && !(mine && account.enabled) && (!phone || view === "list");
+  const freeMode = freeScreen && !roomMode && !placeMode && !(mine && account.enabled) && (!phone || view === "list");
   const guiding = routeOpen && step >= 0, isPicking = routeOpen && !!picking;
 
   useKeys();
@@ -103,15 +119,16 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    setTgBackButton(guide || !!room || (phone && view !== "plan") || routeOpen || roomScreen || freeMode);
-  }, [guide, room, phone, view, routeOpen, roomScreen, freeMode]);
+    setTgBackButton(search || guide || !!room || !!place || (phone && view !== "plan") || routeOpen || roomScreen || freeMode);
+  }, [search, guide, room, place, phone, view, routeOpen, roomScreen, freeMode]);
 
   // новая вкладка или экран открываются сверху
-  useEffect(() => { if (body.current) body.current.scrollTop = 0; }, [view, roomMode, routeOpen, freeMode]);
+  useEffect(() => { if (body.current) body.current.scrollTop = 0; }, [view, roomMode, placeMode, place, routeOpen, freeMode]);
 
   let content;
   if (routeOpen) content = <RoutePanel />;
   else if (roomMode) content = <RoomScreen />;
+  else if (placeMode) content = <PlaceScreen />;
   else if (freeMode) content = <FreeScreen />;
   else {
     content = (
@@ -134,6 +151,7 @@ export function App() {
         <div className="side-body" id="sideBody" ref={body}>{content}</div>
       </aside>
       <ConnectGuide />
+      <SearchLayer />
       <Toast />
       <TabBar />
     </div>

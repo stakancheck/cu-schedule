@@ -29,6 +29,7 @@ export interface AppState {
   t: number;
   live: boolean;
   room: string | null;       // выбранная на плане аудитория
+  place: string | null;      // выбранное на плане место без расписания: кухня, переговорная, туалет (ключ из nav/places)
   roomScreen: boolean;       // телефон: расписание выбранной аудитории на весь экран
   freeScreen: boolean;       // вкладка «Расписание»: экран свободных аудиторий вместо списка пар
   angle: number;             // поворот плана, градусы (любой, кнопки крутят на 90)
@@ -39,6 +40,7 @@ export interface AppState {
   route: RouteState;
   toast: { text: string; id: number } | null;
   guide: number | null;      // инструкция подключения календаря: открытый слайд или null
+  search: boolean;           // открыт общий поиск
 }
 
 export const emptyRoute: RouteState = {
@@ -48,9 +50,9 @@ export const emptyRoute: RouteState = {
 function initialState(): AppState {
   const s: AppState = {
     campus: "CT", floor: 3, date: todayIso(), t: nowMin(), live: true,
-    room: null, roomScreen: false, freeScreen: false, angle: 0, view: "plan",
+    room: null, place: null, roomScreen: false, freeScreen: false, angle: 0, view: "plan",
     mine: account.enabled && (lsGet("cu.mode") ? lsGet("cu.mode") === "mine" : !!account.user),
-    query: "", showPast: false, route: emptyRoute, toast: null, guide: null,
+    query: "", showPast: false, route: emptyRoute, toast: null, guide: null, search: false,
   };
   const h = new URLSearchParams(location.hash.slice(1));
   const c = h.get("c");
@@ -65,6 +67,12 @@ function initialState(): AppState {
     s.campus = roomCampus[r];
     s.floor = roomFloor[r];
     s.roomScreen = h.get("v") === "room";
+  }
+  const pl = getPlace(h.get("pl"));
+  if (!s.room && pl && pl.kind !== "point" && pl.campus && CAMPUSES[pl.campus]?.floors[pl.floor!]) {
+    s.place = pl.key;
+    s.campus = pl.campus;
+    s.floor = pl.floor!;
   }
   const rot = h.get("rot");
   if (rot) s.angle = ((+rot % 360) + 360) % 360;
@@ -112,6 +120,7 @@ function writeHash(s: AppState) {
   if (s.date !== todayIso()) h.set("d", s.date);
   if (!s.live) h.set("t", fmt(s.t));
   if (s.room) h.set("r", s.room);
+  if (s.place) h.set("pl", s.place);
   const rot = ((Math.round(s.angle) % 360) + 360) % 360;
   if (rot) h.set("rot", String(rot));
   if (s.roomScreen && s.room) h.set("v", "room");

@@ -4,10 +4,11 @@
 import type { Campus, Floor, PlanRoom, StreetText } from "../types";
 import { CAMPUSES, centroid, roomFloor, roomStatus } from "../lib/schedule";
 import { getState, setState, subscribe, type AppState } from "../lib/store";
-import { planCtl, pickPoint, selectRoom, tapRoomInRoute, type Box, type FocusOpts } from "../lib/actions";
+import { planCtl, pickPoint, selectPlace, selectRoom, tapPlaceInRoute, type Box, type FocusOpts } from "../lib/actions";
 import { fmt, isPhone, reduceMotion } from "../lib/util";
 import { debugImage, links } from "../nav/engine";
-import { getPlace } from "../nav/places";
+import { getPlace, iconPlace, labelPlace } from "../nav/places";
+import { CATS, placeInfo } from "../nav/info";
 import { NAV } from "../nav/data";
 import { CITY_IC, RT_IC } from "../components/icons";
 import { ADDRESS } from "../nav/city";
@@ -76,6 +77,9 @@ export class PlanRenderer {
   private streetLabels: Rotating[] = [];
   private roomEls: Record<string, SVGPolygonElement> = {};
   private roomLabelEls: Record<string, { sub: SVGTextElement; dot: SVGCircleElement }> = {};
+  private placeEls = new Map<string, Element[]>(); // места без расписания: заливка, подписи, иконки
+  private selG: SVGGElement | null = null;
+  private selMarks: Upright[] = [];
   private routeG: SVGGElement | null = null;
   private routeTop: SVGGElement | null = null;
   private routeMarks: Upright[] = [];
@@ -145,6 +149,7 @@ export class PlanRenderer {
       return;
     }
     if (s.date !== prev.date || s.t !== prev.t || s.room !== prev.room) this.paintRooms();
+    if (s.place !== prev.place) this.paintPlace();
     if (s.route !== prev.route) this.paintRoute();
   }
 
@@ -187,12 +192,23 @@ export class PlanRenderer {
     const s = getState();
     const floor = this.campus.floors[s.floor];
     this.svg.innerHTML = "";
-    this.labels = []; this.streetLabels = []; this.roomEls = {}; this.roomLabelEls = {};
+    this.labels = []; this.streetLabels = []; this.roomEls = {}; this.roomLabelEls = {}; this.placeEls.clear();
     this.world = el("g", {}, this.svg);
     this.buildFloor(floor);
     this.applyTransform();
     this.paintRooms();
+    this.paintPlace();
     this.paintRoute();
+  }
+
+  // Элемент плана открывает место: помечаем его и запоминаем для подсветки
+  private asPlace<E extends Element>(e: E, key: string | undefined) {
+    if (!key) return e;
+    e.setAttribute("data-place", key);
+    e.classList.add("hit");
+    const list = this.placeEls.get(key);
+    if (list) list.push(e); else this.placeEls.set(key, [e]);
+    return e;
   }
 
   private buildFloor(floor: Floor) {
@@ -209,7 +225,7 @@ export class PlanRenderer {
     for (const r of floor.rooms) {
       if (!r.pts.length || roomFloor[r.id]) continue;
       const k = ROOM_FILL[r.color] || (isCowork(r) ? "open" : "plain");
-      el("polygon", { class: "r v " + k, points: ptsAttr(r.pts) }, roomsG);
+      this.asPlace(el("polygon", { class: "r v " + k, points: ptsAttr(r.pts) }, roomsG), getPlace("r:" + r.id)?.key);
     }
     for (const p of floor.wallPaths) el("path", { class: "v-wall", d: p.d, "fill-rule": eo(p) }, fg);
     for (const p of floor.voidPaths) el("path", { class: "v-void", d: p.d, "fill-rule": eo(p) }, fg);
@@ -233,15 +249,20 @@ export class PlanRenderer {
       const g = this.upright(fg, ic.x, ic.y);
       g.setAttribute("class", "vicon");
       for (const p of ic.parts) el("path", { class: "ic-" + p.c, d: p.d, "fill-rule": eo(p) }, g);
+      // туалет, лестница, лифт, значок кухни: круг чуть больше иконки, чтобы попасть пальцем
+      const pl = iconPlace(c.id, floor.n, ic.x, ic.y, ic.parts.some((p) => p.c === "kitchen"));
+      if (pl) { el("circle", { class: "ic-hit", r: 17 }, g); this.asPlace(g, pl.key); }
     }
 
-    for (const l of floor.labels) {
+    floor.labels.forEach((l, i) => {
       // вертикальная плашка поворачивается вместе с планом, как подпись улицы
       const g = l.vertical ? el("g", {}, fg) : this.upright(fg, l.x, l.y);
       if (l.vertical) this.streetLabels.push({ g, x: l.x, y: l.y, angle: -90 });
       const cls = isCowork(l) ? "tag-open" : TAG_CLS[l.color] || "";
-      this.tag(g, l.text, { size: l.big ? 30 : 12, cls, padX: l.big ? 14 : 7 }).style.pointerEvents = "none";
-    }
+      const t = this.tag(g, l.text, { size: l.big ? 30 : 12, cls, padX: l.big ? 14 : 7 });
+      const pl = labelPlace(c.id, floor.n, i);
+      if (pl) this.asPlace(t, pl.key); else t.style.pointerEvents = "none";
+    });
 
     for (const r of floor.rooms) {
       if (roomFloor[r.id]) this.roomLabel(fg, r);
@@ -249,9 +270,10 @@ export class PlanRenderer {
         const g = this.upright(fg, r.tag[0], r.tag[1]);
         const text = r.label ? `${short(r.label)} · ${r.id}` : r.id;
         const tagEl = this.tag(g, text, { size: 11, cls: isCowork(r) ? "tag-open" : TAG_CLS[r.color] || "", padX: 6 });
-        el("title", {}, tagEl).textContent = r.label ? `${r.id}: ${r.label}` : r.id;
+        this.asPlace(tagEl, getPlace("r:" + r.id)?.key);
       }
     }
+    this.selG = el("g", { class: "place-sel" }, fg);
     this.routeTop = el("g", { class: "route-top" }, fg);
     if (NAV_DEBUG) this.debugStops(fg, floor.n);
   }
@@ -281,6 +303,22 @@ export class PlanRenderer {
       lab.sub.textContent = st.st === "busy" ? `до ${fmt(st.until!)}` : st.until ? `своб. до ${fmt(st.until)}` : "свободна";
     }
     this.svg.querySelectorAll(".rooms").forEach((g) => g.classList.toggle("has-sel", !!s.room));
+  }
+
+  // Выбранное место: подсветка его заливки и подписей, булавка в его точке
+  private paintPlace() {
+    if (!this.selG) return;
+    this.svg.querySelectorAll(".hit.sel").forEach((e) => e.classList.remove("sel"));
+    this.selG.textContent = "";
+    this.selMarks = [];
+    const s = getState(), p = getPlace(s.place);
+    if (!p || p.campus !== s.campus || p.floor !== s.floor) return;
+    for (const e of this.placeEls.get(p.key) || []) e.classList.add("sel");
+    const g = el("g", { class: "pl-pin tone-" + CATS[placeInfo(p).cat].tone }, this.selG);
+    el("path", { d: "M0,0C-3,-6 -11,-11 -11,-20A11,11 0 1 1 11,-20C11,-11 3,-6 0,0Z" }, g);
+    el("circle", { cy: -20, r: 4.2 }, g);
+    this.selMarks.push({ g, x: p.x!, y: p.y! });
+    this.applyTransform();
   }
 
   /* ---------- линия и метки маршрута */
@@ -404,7 +442,7 @@ export class PlanRenderer {
     this.svg.setAttribute("viewBox", `${cx - w / 2} ${cy - h / 2} ${w} ${h}`);
     // метки маршрута одного размера на экране при любом масштабе
     this.svg.style.setProperty("--u", u.toFixed(3) + "px");
-    for (const l of this.routeMarks) l.g.setAttribute("transform", `translate(${l.x},${l.y}) rotate(${-a}) scale(${u.toFixed(3)})`);
+    for (const l of [...this.routeMarks, ...this.selMarks]) l.g.setAttribute("transform", `translate(${l.x},${l.y}) rotate(${-a}) scale(${u.toFixed(3)})`);
     document.getElementById("dial")?.setAttribute("transform", `rotate(${a})`);
     document.getElementById("compassN")?.setAttribute("transform", `translate(0,-12) rotate(${-a})`);
     const off = Math.abs(a - Math.round(a / 360) * 360);
@@ -632,7 +670,7 @@ export class PlanRenderer {
     on("pointerup", endDrag);
     on("pointercancel", endDrag);
     on("pointerover", (e) => this.showTip(e));
-    on("pointerout", (e) => { if ((e.target as Element).closest?.("[data-room]")) this.hideTip(); });
+    on("pointerout", (e) => { if ((e.target as Element).closest?.("[data-room], [data-place]")) this.hideTip(); });
   }
 
   private centerAngle(x: number, y: number) {
@@ -643,18 +681,28 @@ export class PlanRenderer {
   private tap(e: PointerEvent, target: Element | null) {
     const s = getState();
     const room = (target?.closest?.("[data-room]") as SVGElement | null)?.dataset.room;
+    const place = (target?.closest?.("[data-place]") as SVGElement | null)?.dataset.place;
     const p = this.worldPoint(e.clientX, e.clientY);
     if (NAV_DEBUG) console.log(`[${p.x.toFixed(1)}, ${p.y.toFixed(1)}]`, `этаж ${s.floor}`);
+    const key = room ? "r:" + room : place;
     if (s.route.open && s.route.picking) pickPoint(p.x, p.y);
-    else if (room && s.route.open && s.route.step < 0) tapRoomInRoute(room);
+    else if (key && s.route.open && s.route.step < 0) tapPlaceInRoute(key);
     else if (room) selectRoom(room === s.room ? null : room);
+    else if (place) selectPlace(place === s.place ? null : place);
   }
 
   /* ---------- подсказка: только для мыши, на тач-экране информацию даёт карточка */
   private showTip(e: PointerEvent) {
     if (e.pointerType !== "mouse" || this.drag) return;
     const r = (e.target as Element).closest?.("[data-room]") as SVGElement | null;
-    if (!r) return;
+    if (!r) {
+      const pl = getPlace(((e.target as Element).closest?.("[data-place]") as SVGElement | null)?.dataset.place);
+      if (!pl) return;
+      const i = placeInfo(pl);
+      this.tip.innerHTML = `<b>${esc(pl.title)}</b><br><span style="opacity:.8">${esc(i.about || CATS[i.cat].name)}</span>`;
+      this.tip.hidden = false;
+      return;
+    }
     const s = getState(), room = r.dataset.room!, st = roomStatus(room, s.date, s.t);
     let html = `<b>${esc(room)}</b><br>`;
     if (st.st === "busy") html += `Занята до ${fmt(st.until!)}<br><span style="opacity:.8">${esc(st.ev!.title)}</span>`;

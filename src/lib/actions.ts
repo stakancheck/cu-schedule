@@ -1,5 +1,5 @@
 /* Действия пользователя: меняют состояние и двигают план */
-import { CAMPUSES, defaultFloor, roomCampus, roomFloor, type CampusId } from "./schedule";
+import { CAMPUSES, defaultFloor, roomCampus, roomFloor, type CampusId, type Ev } from "./schedule";
 import { getState, setRoute, setState, emptyRoute, type Field, type View } from "./store";
 import { haptic } from "./telegram";
 import { isPhone, lsGet, lsSet, nowMin, OTHER_DAY_T, todayIso } from "./util";
@@ -51,15 +51,36 @@ export function setCampus(id: CampusId) {
   const s = getState();
   if (id === s.campus || !CAMPUSES[id]) return;
   lastFloor[s.campus] = s.floor;
-  setState({ campus: id, room: null, roomScreen: false, floor: lastFloor[id] || defaultFloor(CAMPUSES[id]) });
+  setState({ campus: id, room: null, place: null, roomScreen: false, floor: lastFloor[id] || defaultFloor(CAMPUSES[id]) });
 }
 
+// Выбрать аудиторию или снять выбор (null снимает и выбранное место)
 export function selectRoom(room: string | null) {
   const s = getState();
   if (room && room !== s.room) haptic.select();
-  const patch: Parameters<typeof setState>[0] = { room, roomScreen: room ? s.roomScreen && room === s.room : false };
-  if (room) { patch.campus = roomCampus[room]; patch.floor = roomFloor[room]; }
+  const patch: Parameters<typeof setState>[0] = { room, place: null, roomScreen: room ? s.roomScreen && room === s.room : false };
+  if (room) {
+    if (roomCampus[room] !== s.campus) lastFloor[s.campus] = s.floor;
+    patch.campus = roomCampus[room]; patch.floor = roomFloor[room];
+  }
   setState(patch);
+}
+
+// Место без расписания: кухня, переговорная, туалет. focus - ещё и показать его на плане
+export function selectPlace(key: string | null, focus = false) {
+  const s = getState(), p = getPlace(key);
+  if (!key || !p || p.campus == null) { if (s.place) setState({ place: null }); return; }
+  if (key !== s.place) haptic.select();
+  if (p.campus !== s.campus) lastFloor[s.campus] = s.floor;
+  setState({ place: key, room: null, roomScreen: false, campus: p.campus, floor: p.floor! });
+  if (!focus) return;
+  if (isPhone()) setView("plan");
+  afterPaint(() => {
+    const r = p.room ? CAMPUSES[p.campus!].floors[p.floor!].rooms.find((x) => x.id === p.room) : null;
+    const box = r?.pts.length ? bboxOf(r.pts) : { x: p.x! - 70, y: p.y! - 70, width: 140, height: 140 };
+    // на телефоне место должно оказаться над своей карточкой
+    planCtl.current?.focusBox(box, { bottom: sheetCover(".place-peek") });
+  });
 }
 
 // Аудитория из списка: выбрать, открыть план, приблизить
@@ -76,6 +97,9 @@ export const openFreeScreen = () => setState({ freeScreen: true });
 export const closeFreeScreen = () => setState({ freeScreen: false });
 
 export const openGuide = (slide = 0) => { haptic.select(); setState({ guide: slide }); };
+
+export const openSearch = () => { haptic.select(); setState({ search: true }); };
+export const closeSearch = () => setState({ search: false });
 export const closeGuide = () => setState({ guide: null });
 
 export function setView(v: View) {
@@ -98,6 +122,14 @@ export const tick = () => {
   const m = nowMin();
   if (m !== s.t) setState({ t: m, date: todayIso() });
 };
+
+// Пара из поиска: план на её день и время (идущую сейчас - в живом времени), аудитория выбрана
+export function showEvent(ev: Ev, room = ev.rooms[0]) {
+  const now = nowMin();
+  if (ev.date === todayIso() && ev.s <= now && now < ev.e) goNow();
+  else { setDate(ev.date); setTime(ev.s); }
+  pickRoom(room);
+}
 
 export function setMode(mine: boolean) {
   lsSet("cu.mode", mine ? "mine" : "all");
@@ -221,7 +253,7 @@ const curOption = () => { const r = getState().route; return r.options ? r.optio
 // Переключить кампус и этаж под маршрут, не сбрасывая его
 function showFloor(cid: CampusId, n: number) {
   const s = getState();
-  if (cid !== s.campus) { lastFloor[s.campus] = s.floor; setState({ campus: cid, room: null, roomScreen: false, floor: n }); }
+  if (cid !== s.campus) { lastFloor[s.campus] = s.floor; setState({ campus: cid, room: null, place: null, roomScreen: false, floor: n }); }
   else if (n !== s.floor) setState({ floor: n });
 }
 
@@ -244,10 +276,10 @@ export function selectOption(i: number) {
   focusOption();
 }
 
-// Сколько пикселей плана снизу закрывает карточка шага
-function sheetCover() {
-  const sh = document.getElementById("routeSheet"), svg = document.getElementById("plan");
-  if (!sh || !svg) return null;
+// Сколько пикселей плана снизу закрывает карточка: шага маршрута или места
+function sheetCover(sel = "#routeSheet") {
+  const sh = document.querySelector<HTMLElement>(sel), svg = document.getElementById("plan");
+  if (!sh || !svg || !sh.offsetParent) return null;
   return Math.max(0, svg.getBoundingClientRect().bottom - sh.getBoundingClientRect().top + 12);
 }
 
@@ -303,5 +335,5 @@ export function pickPoint(x: number, y: number) {
   setRoutePlace(field, key);
 }
 
-// Нажатие на аудиторию, пока выбирают маршрут: заполняет «куда», а если оно есть - «откуда»
-export const tapRoomInRoute = (room: string) => setRoutePlace(getState().route.to ? "from" : "to", "r:" + room);
+// Нажатие на аудиторию или место, пока выбирают маршрут: заполняет «куда», а если оно есть - «откуда»
+export const tapPlaceInRoute = (key: string) => setRoutePlace(getState().route.to ? "from" : "to", key);

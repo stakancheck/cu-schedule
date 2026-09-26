@@ -35,6 +35,17 @@ const PATHS = {
   check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
   ext: '<path d="M14 4h6v6M20 4l-9 9M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>',
   sched: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
+  // категории мест на плане
+  wc: '<path d="M12 3v18"/><circle cx="6.5" cy="5" r="1.7"/><path d="M5 21v-6.5M8 21v-6.5M4 14.5V10a1.5 1.5 0 0 1 1.5-1.5h2A1.5 1.5 0 0 1 9 10v4.5"/><circle cx="17.5" cy="5" r="1.7"/><path d="M16.3 21v-5M18.7 21v-5M14.5 16 16 9.8a1.5 1.5 0 0 1 3 0l1.5 6.2Z"/>',
+  cup: '<path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5Z"/><path d="M17 11h1.5a2.5 2.5 0 0 1 0 5H17M8 3.5c-.8 1 .8 2 0 3M12 3.5c-.8 1 .8 2 0 3"/>',
+  desk: '<rect x="5" y="5" width="14" height="10" rx="1.5"/><path d="M3 19h18M9.5 15l-1 4M14.5 15l1 4"/>',
+  people: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c.8-3.4 3.2-5.3 6-5.3s5.2 1.9 6 5.3"/><circle cx="17" cy="9" r="2.5"/><path d="M16.5 14.2c2.3.2 4 1.8 4.5 4.8"/>',
+  info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><circle cx="12" cy="7.8" r=".9" fill="currentColor" stroke="none"/>',
+  heart: '<path d="M12 20s-7.5-4.6-7.5-10.1A4.3 4.3 0 0 1 12 7.3a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20Z"/>',
+  dumbbell: '<path d="M6.5 7.5v9M17.5 7.5v9M3.5 10v4M20.5 10v4M6.5 12h11"/>',
+  sofa: '<path d="M5 11V8.5A2.5 2.5 0 0 1 7.5 6h9A2.5 2.5 0 0 1 19 8.5V11"/><path d="M3 13a2 2 0 0 1 4 0v1h10v-1a2 2 0 0 1 4 0v4.5H3ZM5 17.5V20M19 17.5V20"/>',
+  briefcase: '<rect x="3.5" y="7" width="17" height="12.5" rx="2"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7M3.5 12.5h17"/>',
 } as const;
 
 export type IconName = keyof typeof PATHS;
