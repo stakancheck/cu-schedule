@@ -6,6 +6,9 @@ import { closeFreeScreen, openFreeScreen, pickRoom } from "../lib/actions";
 import { Icon } from "./icons";
 import { cx, dayFmt, fmt, parseIso } from "../lib/util";
 
+// путь от base: на Pages сайт живёт в подпапке, абсолютный /img/... даёт 404
+const FLAG = import.meta.env.BASE_URL + "img/free-rooms-flag.png";
+
 export function RoomChip({ room, sel }: { room: string; sel?: boolean }) {
   return <button className={cx("room", sel && "sel")} onClick={() => pickRoom(room)} title="Показать на плане">{room}</button>;
 }
@@ -104,7 +107,7 @@ function FreeRoomsCard() {
   const best = floors.reduce((a, b) => (b.free > a.free ? b : a));
   return (
     <button className="free-card" onClick={openFreeScreen}>
-      <img className="fc-ic" src="/img/free-rooms-flag.png" alt="" />
+      <img className="fc-ic" src={FLAG} alt="" />
       <span className="fc-text">
         <b>Свободные аудитории</b>
         <small>
