@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Парсер PDF-планов кампусов -> js/plans-<кампус>.js.
+"""Парсер PDF-планов кампусов -> public/data/plans-<кампус>.js.
 
 Оба плана (Дукат и ЦТ) сделаны по одному шаблону: 1 страница описания
 + по странице на этаж.
@@ -34,7 +34,7 @@ ROOT = Path(__file__).resolve().parent.parent
 CAMPUSES = {
     "ducat": {
         "id": "DUCAT", "name": "Дукат", "short": "Дукат",
-        "src": "Downloads/plan-ducat.pdf", "out": "js/plans-ducat.js",
+        "src": "Downloads/plan-ducat.pdf", "out": "public/data/plans-ducat.js",
         "code": r"^(B\d{3,4}|F\d{3})$",
         "halls": {"F101", "B1004", "B1006"},  # действительно большие залы
         # проёмы закрываем морфологией по линиям: пробуемые ширины, pt
@@ -44,7 +44,7 @@ CAMPUSES = {
     },
     "ct": {
         "id": "CT", "name": "Центральный телеграф", "short": "ЦТ",
-        "src": "Downloads/ЦТ_план.pdf", "out": "js/plans-ct.js",
+        "src": "Downloads/ЦТ_план.pdf", "out": "public/data/plans-ct.js",
         "code": r"^[NSEW]\d{3}(\.\d)?$",
         "halls": set(),
         "class_label": "Аудитория",  # учебные показываем, даже если пар в них нет

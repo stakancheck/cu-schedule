@@ -5,7 +5,7 @@
 Выход:
   data/schedule.csv  - одна строка на занятие, аудитории разложены в список;
   data/rooms.csv     - справочник аудиторий: кампус, этаж, число занятий;
-  data/schedule.js   - компактная версия для веб-приложения (window.SCHEDULE).
+  public/data/schedule.js - компактная версия для веб-приложения (window.SCHEDULE).
 
 Запуск: python3 scripts/build_db.py [путь_к_xlsx]
 """
@@ -128,7 +128,7 @@ def main() -> None:
         "strings": dict_,
         "events": compact,
     }
-    with open(OUT / "schedule.js", "w", encoding="utf-8") as f:
+    with open(ROOT / "public/data/schedule.js", "w", encoding="utf-8") as f:
         f.write("window.SCHEDULE=")
         json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
         f.write(";\n")

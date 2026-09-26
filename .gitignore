@@ -7,3 +7,7 @@ __pycache__/
 worker/node_modules/
 worker/.wrangler/
 worker/.dev.vars
+
+# Сайт
+node_modules/
+dist/

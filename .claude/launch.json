@@ -3,14 +3,19 @@
   "configurations": [
     {
       "name": "cu-schedule",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8765"],
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 8765
     },
     {
       "name": "api",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["worker/dev.mjs"],
+      "runtimeArgs": [
+        "worker/dev.mjs"
+      ],
       "port": 8787
     }
   ]
