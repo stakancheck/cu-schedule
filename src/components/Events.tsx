@@ -104,7 +104,7 @@ function FreeRoomsCard() {
   const best = floors.reduce((a, b) => (b.free > a.free ? b : a));
   return (
     <button className="free-card" onClick={openFreeScreen}>
-      <span className="fc-ic"><Icon name="door" /></span>
+      <img className="fc-ic" src="/img/free-rooms-flag.png" alt="" />
       <span className="fc-text">
         <b>Свободные аудитории</b>
         <small>
