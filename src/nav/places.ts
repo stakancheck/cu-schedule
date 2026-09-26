@@ -3,6 +3,7 @@
 import { CAMPUSES, centroid, roomFloor, type CampusId } from "../lib/schedule";
 import { norm } from "../lib/util";
 import { NAV } from "./data";
+import { NOTES } from "./info";
 import { inPoly, type GoalPoint } from "./engine";
 
 export type PlaceKind = "room" | "space" | "poi" | "entrance" | "wc" | "link" | "nearest" | "point";
@@ -29,10 +30,12 @@ for (const c of Object.values(CAMPUSES)) {
     for (const r of f.rooms) {
       const [x, y] = r.pts.length ? centroid(r.pts) : r.tag;
       const cls = !!roomFloor[r.id];
+      // помещение без подписи на плане, но с названием в справочнике
+      const label = r.label || (!cls && NOTES[r.id]?.title) || "";
       all.set("r:" + r.id, {
         key: "r:" + r.id, kind: cls ? "room" : "space", room: r.id, campus: c.id, floor: f.n, x, y,
-        title: cls ? r.id : r.label || `Помещение ${r.id}`, sub: cls || !r.label ? "" : r.id, food: FOOD.test(r.label || ""),
-        label: r.label || "", color: r.color,
+        title: cls ? r.id : label || `Помещение ${r.id}`, sub: cls || !label ? "" : r.id, food: FOOD.test(label),
+        label, color: r.color,
       });
     }
     f.labels.forEach((l, i) => {
@@ -58,7 +61,9 @@ for (const c of Object.values(CAMPUSES)) {
     const floors = Object.keys(l.at).map(Number).sort((a, b) => a - b);
     const sub = [
       l.name,
-      floors.length > 1 && `этажи ${floors[0]}–${floors[floors.length - 1]}`,
+      // подряд - диапазоном, с пропусками - списком (лифт Дуката на 1, 3, 7 и 10)
+      floors.length > 1 && (floors[floors.length - 1] - floors[0] === floors.length - 1
+        ? `этажи ${floors[0]}–${floors[floors.length - 1]}` : `этажи ${floors.join(", ")}`),
       l.oneway && (l.oneway === "up" ? "только вверх" : "только вниз"),
       l.closed && (l.kind === "lift" ? "сейчас закрыт" : "сейчас закрыта"),
     ].filter(Boolean).join(", ");

@@ -1,5 +1,6 @@
 /* Место без расписания (кухня, переговорная, туалет, лестница): что это и как дойти.
    На телефоне карточка поверх плана, на компьютере - правая колонка. */
+import { useEffect, useState } from "react";
 import { useApp } from "../lib/store";
 import { openRoute, selectPlace } from "../lib/actions";
 import { cx, norm } from "../lib/util";
@@ -10,8 +11,12 @@ import { Icon } from "./icons";
 const CONTACT = "https://t.me/stakancheck";
 
 export function PlaceIcon({ p, className }: { p: Place; className?: string }) {
-  const c = CATS[placeInfo(p).cat];
-  return <span className={cx("pl-ic", "tone-" + c.tone, className)}><Icon name={p.kind === "link" && p.title === "Лифт" ? "lift" : c.icon} /></span>;
+  const i = placeInfo(p), c = CATS[i.cat];
+  return (
+    <span className={cx("pl-ic", "tone-" + c.tone, className)}>
+      {i.note?.emoji ? <span className="pl-emoji">{i.note.emoji}</span> : <Icon name={p.kind === "link" && p.title === "Лифт" ? "lift" : c.icon} />}
+    </span>
+  );
 }
 
 const dist = (a: Place, b: Place) => Math.hypot(a.x! - b.x!, a.y! - b.y!);
@@ -36,8 +41,19 @@ function similar(p: Place, limit: number) {
   return out;
 }
 
-function PlaceAbout({ p }: { p: Place }) {
+const plural = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? "нюанс" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "нюанса" : "нюансов");
+
+// Почта в тексте нюанса - ссылка
+const Linked = ({ text }: { text: string }) => (
+  <>{text.split(/(\S+@\S+\.[a-z]+)/).map((x, k) => (k % 2 ? <a key={k} href={"mailto:" + x}>{x}</a> : x))}</>
+);
+
+// limit - сколько нюансов показать сразу (карточка поверх плана не должна закрывать его целиком)
+function PlaceAbout({ p, limit = Infinity }: { p: Place; limit?: number }) {
   const i = placeInfo(p), n = i.note;
+  const [all, setAll] = useState(false);
+  useEffect(() => setAll(false), [p.key]);
+  const facts = n?.facts || [], shown = all ? facts : facts.slice(0, limit);
   return (
     <div className="pl-about">
       {i.about && <p>{i.about}</p>}
@@ -47,8 +63,11 @@ function PlaceAbout({ p }: { p: Place }) {
           {n.who && <span><Icon name="user" />{n.who}</span>}
         </p>
       )}
-      {!!n?.facts?.length && <ul className="pl-facts">{n.facts.map((f, k) => <li key={k}>{f}</li>)}</ul>}
-      {!n && p.kind !== "link" && p.kind !== "wc" && (
+      {!!shown.length && <ul className="pl-facts">{shown.map((f, k) => <li key={k}><Linked text={f} /></li>)}</ul>}
+      {shown.length < facts.length && (
+        <button className="pl-more" onClick={() => setAll(true)}>Ещё {facts.length - shown.length} {plural(facts.length - shown.length)}</button>
+      )}
+      {!i.own && !n?.facts?.length && p.kind !== "link" && p.kind !== "wc" && (
         <p className="pl-ask">
           {i.about ? "Знаете подробности" : "Знаете, что здесь"}: что есть, когда открыто, кому можно?{" "}
           <a href={CONTACT} target="_blank" rel="noopener">Напишите</a>, добавим.
@@ -96,7 +115,7 @@ export function PlacePeek() {
         <span className="pl-title"><b>{p.title}</b><span className="pk-where">{placeWhere(p)}</span></span>
         <button className="pk-x" onClick={() => selectPlace(null)} title="Сбросить выбор"><Icon name="close" /></button>
       </div>
-      <PlaceAbout p={p} />
+      <PlaceAbout p={p} limit={2} />
       <Similar p={p} limit={6} />
       <RouteBtns p={p} className="pk-actions pl-actions" />
     </div>

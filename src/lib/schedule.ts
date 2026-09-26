@@ -1,6 +1,7 @@
 /* Общее расписание: пары по датам, занятость и статусы аудиторий */
 import type { Campus, Pt } from "../types";
 import { toMin } from "./util";
+import { NAV } from "../nav/data";
 
 export const DAY_START = 8 * 60;   // границы дня для кампусов без своих часов
 export const DAY_END = 22 * 60;
@@ -19,6 +20,19 @@ const MIN_WINDOW = 15;             // окна короче не показыв�
 
 export const CAMPUSES = window.CAMPUSES;
 export type CampusId = string;
+
+// Поправки плана из разметки: дыра в полу - пустота (её не пройти) и стена толщиной 5 по контуру, как в PDF
+for (const [cid, nav] of Object.entries(NAV)) {
+  for (const [n, holes] of Object.entries(nav.holes || {})) {
+    const f = CAMPUSES[cid]?.floors[n];
+    if (!f) continue;
+    const rect = ([x0, y0, x1, y1]: number[]) => `M${x0},${y0}L${x1},${y0}L${x1},${y1}L${x0},${y1}Z`;
+    for (const [x0, y0, x1, y1] of holes) {
+      f.voidPaths.push({ d: rect([x0, y0, x1, y1]), eo: false });
+      f.wallPaths.push({ d: rect([x0 - 2.5, y0 - 2.5, x1 + 2.5, y1 + 2.5]) + rect([x0 + 2.5, y0 + 2.5, x1 - 2.5, y1 - 2.5]), eo: true });
+    }
+  }
+}
 const S = window.SCHEDULE;
 const str = S.strings;
 export const updatedAt = S.updatedAt;

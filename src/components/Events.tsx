@@ -133,6 +133,7 @@ export function FreeScreen() {
       {outOfRange(date) ? <NoData /> : (
         <div className="free-rooms">
           <h3 className="block-title">Свободны в {fmt(t)} · {free} из {total}</h3>
+          <p className="free-hint">Свободную аудиторию можно занять для учёбы, одному или командой. Освободи её за 15 минут до начала пары.</p>
           {floors.map(({ n, wings }) => (
             <div key={n} className="fr-floor">
               <div className="fr-n">{n}<small>этаж</small></div>
