@@ -11,6 +11,13 @@ export const haptic = {
   error() { if (tgAt("6.1")) tg!.HapticFeedback.notificationOccurred("error"); },
 };
 
+export function openExternalLink(url: string) {
+  if (inTg && tg) {
+    if (/^https:\/\/t\.me\//.test(url)) tg.openTelegramLink(url);
+    else tg.openLink(url);
+  } else window.open(url, "_blank", "noopener,noreferrer");
+}
+
 export function syncTgColors() {
   if (!tgAt("6.1")) return;
   // на телефоне фон экрана - цвет панели (без карточек-островков)
@@ -50,8 +57,7 @@ export function initTelegram(onBack: () => void) {
     if (!a) return;
     e.preventDefault();
     // ссылки на Telegram открываем нативно, остальные во внешнем браузере
-    if (/^https:\/\/t\.me\//.test(a.href)) tg.openTelegramLink(a.href);
-    else tg.openLink(a.href);
+    openExternalLink(a.href);
   });
 }
 

@@ -5,7 +5,7 @@ import { useApp } from "../lib/store";
 import { openRoute, revealSelection, selectPlace } from "../lib/actions";
 import { cx, norm } from "../lib/util";
 import { allPlaces, getPlace, placeWhere, type Place } from "../nav/places";
-import { CATS, placeInfo } from "../nav/info";
+import { CATS, isOpenAt, placeInfo } from "../nav/info";
 import { Icon } from "./icons";
 
 const CONTACT = "https://t.me/stakancheck";
@@ -52,11 +52,17 @@ const Linked = ({ text }: { text: string }) => (
 // limit - сколько нюансов показать сразу (карточка поверх плана не должна закрывать его целиком)
 function PlaceAbout({ p, limit = Infinity }: { p: Place; limit?: number }) {
   const i = placeInfo(p), n = i.note;
+  const date = useApp((s) => s.date), t = useApp((s) => s.t), live = useApp((s) => s.live);
+  const open = n?.weekly ? isOpenAt(n.weekly, date, t) : null;
   const [all, setAll] = useState(false);
   useEffect(() => setAll(false), [p.key]);
   const facts = n?.facts || [], shown = all ? facts : facts.slice(0, limit);
   return (
     <div className="pl-about">
+      {open !== null && <div className="pl-open-status">
+        <span className={cx("pl-open-pill", open ? "open" : "closed")}>{open ? "Открыто" : "Закрыто"}</span>
+        <small>{live ? "сейчас" : "на выбранное время"}</small>
+      </div>}
       {i.about && <p>{i.about}</p>}
       {(n?.hours || n?.who) && (
         <p className="pl-meta">
@@ -68,6 +74,9 @@ function PlaceAbout({ p, limit = Infinity }: { p: Place; limit?: number }) {
       {shown.length < facts.length && (
         <button className="pl-more" onClick={() => setAll(true)}>Ещё {facts.length - shown.length} {plural(facts.length - shown.length)}</button>
       )}
+      {!!n?.links?.length && <div className="pl-links">{n.links.map((link) => (
+        <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer">{link.label}</a>
+      ))}</div>}
       {!i.own && !n?.facts?.length && p.kind !== "link" && p.kind !== "wc" && (
         <p className="pl-ask">
           {i.about ? "Знаете подробности" : "Знаете, что здесь"}: что есть, когда открыто, кому можно?{" "}

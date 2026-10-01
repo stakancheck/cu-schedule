@@ -27,7 +27,52 @@ export interface Note {
   who?: string;       // для кого: «только сотрудники», «нужна запись»
   emoji?: string;     // вместо значка категории в карточке и поиске
   brand?: { color: string; ink?: string; icon: IconName }; // сеть со своим цветом (ink - цвет текста, по умолчанию белый)
+  links?: { label: string; url: string }[]; // запись или связь со специалистом
+  keywords?: string; // дополнительные слова для поиска
+  weekly?: WeeklyHours; // структурированный график для статуса на выбранные дату и время
 }
+
+export interface WeeklyHours {
+  days: number[]; // 0 — воскресенье, 1 — понедельник, ...
+  intervals: [number, number][]; // минуты от полуночи; несколько интервалов учитывают перерыв
+}
+
+export function isOpenAt(schedule: WeeklyHours, date: string, t: number) {
+  const [year, month, day] = date.split("-").map(Number);
+  const weekday = new Date(year, month - 1, day).getDay();
+  return schedule.days.includes(weekday) && schedule.intervals.some(([from, to]) => from <= t && t < to);
+}
+
+const WEEKDAYS = [1, 2, 3, 4, 5];
+const DAILY = [0, ...WEEKDAYS, 6];
+const TEN_TO_SEVEN: WeeklyHours = { days: WEEKDAYS, intervals: [[10 * 60, 19 * 60]] };
+const THERAPIST_HOURS: WeeklyHours = { days: WEEKDAYS, intervals: [[10 * 60, 14 * 60], [15 * 60, 19 * 60]] };
+
+const TIME = "https://time.cu.ru/tsentralnyy-universitet/messages/";
+const MED_CONTACT = { label: "Вопросы о медцентрах · Time", url: TIME + "@i.babenkova" };
+
+// Отдельные карточки в поиске: у каждой свой способ записи или связи.
+// Сведения о специалистах и графиках — из материалов ЦУ, предоставленных пользователем.
+export interface WellbeingCard {
+  id: string;
+  title: string;
+  sub: string;
+  keywords: string;
+  placeKey?: string;
+  action?: { label: string; url: string };
+}
+export const WELLBEING: WellbeingCard[] = [
+  { id: "psych-shutkova", title: "Психолог · Светлана Шутькова", sub: "Очно · B406 · по предварительной записи", keywords: "психолог психологическая помощь поддержка консультация тревога переживания трудно выговориться ментальное здоровье благополучие", placeKey: "r:B406", action: { label: "Записаться", url: "https://cu-events.timepad.ru/event/3219855/" } },
+  { id: "psych-pavlova", title: "Психолог · Лилия Павлова", sub: "Онлайн · Psy Point на 7 этаже Дуката · по записи", keywords: "психолог психологическая помощь поддержка консультация тревога отношения переживания онлайн ментальное здоровье благополучие", action: { label: "Записаться", url: "https://cu-events.timepad.ru/event/3558805/" } },
+  { id: "social-dukov", title: "Социальный педагог · Дмитрий Дуков", sub: "B414 · пн–пт 10:00–19:00", keywords: "социальный педагог соцпедагог социальная помощь буллинг травля конфликт медиация правила кампус общежитие безопасность адаптация", placeKey: "r:B414", action: { label: "Написать в Time", url: TIME + "@d.dukov" } },
+  { id: "social-bazhanova", title: "Социальный педагог · Инга Бажанова", sub: "B414 · пн–пт 10:00–19:00 · север, запад и ШД", keywords: "социальный педагог соцпедагог социальная помощь буллинг травля конфликт медиация правила кампус общежитие безопасность адаптация", placeKey: "r:B414", action: { label: "Написать в Time", url: TIME + "@i.bazhanova" } },
+  { id: "social-matveev", title: "Социальный педагог · Матвей Матвеев", sub: "B414 · пн–пт 10:00–19:00 · юг, восток и ШД", keywords: "социальный педагог соцпедагог социальная помощь буллинг травля конфликт медиация правила кампус общежитие безопасность адаптация", placeKey: "r:B414", action: { label: "Написать в Time", url: TIME + "@ma.i.matveev" } },
+  { id: "therapist-ducat", title: "Врач-терапевт · Дукат", sub: "B404 · пн–пт 10:00–19:00, перерыв 14:00–15:00 · без записи", keywords: "врач терапевт медицинская помощь медпомощь заболел плохо справка больничный здоровье", placeKey: "r:B404" },
+  { id: "therapist-ct", title: "Врач-терапевт · Центральный телеграф", sub: "Сектор S, 3 этаж · пн–пт 10:00–19:00, перерыв 14:00–15:00 · без записи", keywords: "врач терапевт медицинская помощь медпомощь заболел плохо справка больничный здоровье", placeKey: "p:CT:3:19" },
+  { id: "therapist-disk", title: "Врач-терапевт · кампус-отель «Диск»", sub: "Кабинет 131 · пн–пт 10:00–19:00, перерыв 14:00–15:00 · без записи", keywords: "врач терапевт медицинская помощь медпомощь заболел плохо справка здоровье общежитие", action: { label: "Вопросы о медцентре", url: MED_CONTACT.url } },
+  { id: "psychiatrist", title: "Врач-психиатр", sub: "Центральный телеграф · только по предварительной записи", keywords: "психиатр психиатрическая помощь врач диагностика лечение ментальное здоровье", action: { label: "Записаться", url: "https://cu-events.timepad.ru/event/4085087/" } },
+  { id: "urgent-psych", title: "Срочная психологическая помощь", sub: "Наставники · B505 или Time @tutor.duty", keywords: "экстренная срочная психологическая помощь психолог кризис тяжело плохо наставник", placeKey: "r:B505", action: { label: "Написать в Time", url: TIME + "@tutor.duty" } },
+];
 
 // Из гайдов по кампусам (note.cu.ru): общие для нескольких мест нюансы
 const KITCHEN_DUCAT = [
@@ -67,6 +112,52 @@ export const NOTES: Record<string, Note> = {
   "p:DUCAT:4:1": DRINKIT,
   "p:DUCAT:8:1": DRINKIT,
   "F206": { emoji: "💀", facts: ["Если тебе сюда – то удачи!"] },
+  "B414": {
+    about: "Социальные педагоги помогают разобраться с правилами кампуса и проживания, разрешить конфликт и сообщить о буллинге или нарушениях.",
+    hours: "пн–пт 10:00–19:00",
+    weekly: TEN_TO_SEVEN,
+    who: "Студенты, преподаватели и сотрудники",
+    facts: ["Дмитрий Дуков — лид команды", "Инга Бажанова — север, запад и ШД", "Матвей Матвеев — юг, восток и ШД"],
+    links: [
+      { label: "Написать Дмитрию · Time", url: TIME + "@d.dukov" },
+      { label: "Написать Инге · Time", url: TIME + "@i.bazhanova" },
+      { label: "Написать Матвею · Time", url: TIME + "@ma.i.matveev" },
+    ],
+    keywords: "социальный педагог соцпедагог буллинг травля медиация конфликт безопасность общежитие адаптация",
+  },
+  "B406": {
+    about: "Очные индивидуальные консультации клинического психолога Светланы Шутьковой. До 20 бесплатных встреч в семестр; нужна предварительная запись.",
+    hours: "психологическая поддержка: ежедневно 10:00–19:00",
+    weekly: { days: DAILY, intervals: [[10 * 60, 19 * 60]] },
+    who: "По предварительной записи",
+    facts: ["Если нужна более длительная работа, количество консультаций могут увеличить по согласованию"],
+    links: [{ label: "Записаться к Светлане", url: "https://cu-events.timepad.ru/event/3219855/" }, { label: "Написать Светлане · Time", url: TIME + "@s.shutkova" }],
+    keywords: "психолог психологическая помощь поддержка тревога переживания ментальное здоровье",
+  },
+  "B404": {
+    about: "Врач-терапевт: если плохо себя чувствуешь, приходи без предварительной записи. Может назначить лечение и выдать справку о временной нетрудоспособности или допуске к спорту.",
+    hours: "пн–пт 10:00–19:00, перерыв 14:00–15:00",
+    weekly: THERAPIST_HOURS,
+    who: "Без записи",
+    facts: ["Больничный лист для работы оформляют в поликлинике", "В экстренной ситуации вызывай скорую помощь: 103 или 112"],
+    links: [MED_CONTACT],
+    keywords: "врач терапевт медицинская помощь медпомощь заболел справка здоровье",
+  },
+  "CT 3 Медицинский блок": {
+    about: "Врач-терапевт принимает в секторе S без предварительной записи. Может назначить лечение и выдать справку о временной нетрудоспособности или допуске к спорту.",
+    hours: "пн–пт 10:00–19:00, перерыв 14:00–15:00",
+    weekly: THERAPIST_HOURS,
+    who: "Без записи",
+    facts: ["Больничный лист для работы оформляют в поликлинике", "В экстренной ситуации вызывай скорую помощь: 103 или 112"],
+    links: [MED_CONTACT],
+    keywords: "врач терапевт медицинская помощь медпомощь заболел справка здоровье",
+  },
+  "B505": {
+    about: "Здесь можно обратиться к наставникам за срочной психологической поддержкой.",
+    who: "Обращайся к наставникам",
+    links: [{ label: "Написать дежурному наставнику · Time", url: TIME + "@tutor.duty" }],
+    keywords: "экстренная срочная психологическая помощь психолог кризис наставник",
+  },
   // аудитории с расписанием тоже можно описать: описание видно в карточке аудитории
   "B114": {
     about: "Спортивный зал: здесь проходят групповые тренировки.",
@@ -230,7 +321,7 @@ export function placeInfo(p: Place): Info {
   const facts = [...(own?.facts || []), ...(rule?.facts || [])];
   const who = own?.who || rule?.who || (p.campus === "DUCAT" && p.color === "staff" && cat !== "help" ? STAFF_ZONE : undefined);
   const hours = own?.hours || rule?.hours;
-  const note: Note | null = facts.length || who || hours || own?.emoji || own?.brand ? { facts, who, hours, emoji: own?.emoji, brand: own?.brand } : null;
+  const note: Note | null = facts.length || who || hours || own?.emoji || own?.brand || own?.links?.length || own?.keywords || own?.weekly ? { facts, who, hours, emoji: own?.emoji, brand: own?.brand, links: own?.links, keywords: own?.keywords, weekly: own?.weekly } : null;
   const info: Info = { cat, about: own?.about || about, note, own: !!own };
   cache.set(p.key, info);
   return info;
@@ -240,6 +331,6 @@ export function placeInfo(p: Place): Info {
 // У аудитории с расписанием - только её запись в NOTES, без категории
 export function infoText(p: Place) {
   const i = placeInfo(p);
-  if (p.kind === "room") return i.own ? [i.about, ...(i.note?.facts || [])].filter(Boolean).join(" ") : "";
-  return [CATS[i.cat].name, i.about, i.note?.hours, i.note?.who, ...(i.note?.facts || [])].filter(Boolean).join(" ");
+  if (p.kind === "room") return i.own ? [i.about, ...(i.note?.facts || []), i.note?.keywords].filter(Boolean).join(" ") : "";
+  return [CATS[i.cat].name, i.about, i.note?.hours, i.note?.who, ...(i.note?.facts || []), i.note?.keywords].filter(Boolean).join(" ");
 }

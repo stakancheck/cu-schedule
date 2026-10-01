@@ -6,8 +6,9 @@ import { byDate, CAMPUSES, eventsOn, evKind, roomCampus, roomFloor, roomStatus, 
 import { getState, setState, useApp } from "../lib/store";
 import { closeSearch, openRoute, openSearch, pickRoom, selectPlace, setHighlight, setView, showEvent } from "../lib/actions";
 import { addDays, cx, isPhone, lsGet, lsSet, norm, nowMin, parseIso, todayIso } from "../lib/util";
+import { openExternalLink } from "../lib/telegram";
 import { allPlaces, getPlace, normQuery, placeWhere, type Place } from "../nav/places";
-import { infoText } from "../nav/info";
+import { infoText, WELLBEING, type WellbeingCard } from "../nav/info";
 import { PlaceIcon } from "./Place";
 import { statusText } from "./Room";
 import { Icon, type IconName } from "./icons";
@@ -119,7 +120,7 @@ function QuickIcon({ q }: { q: Quick }) {
 }
 
 /* ---------- результаты */
-interface Item { id: string; icon: ReactNode; title: ReactNode; sub: ReactNode; aside?: ReactNode; run: () => void; recent?: string }
+interface Item { id: string; icon: ReactNode; title: ReactNode; sub: ReactNode; aside?: ReactNode; run: () => void; recent?: string; wellbeing?: WellbeingCard }
 interface Group { id: string; title: string; items: Item[]; more: number }
 
 function roomItem(p: Place, date: string, t: number): Item {
@@ -143,6 +144,11 @@ const whoItem = (who: Who, v: string, open: (who: Who, v: string) => void): Item
   title: v, sub: nextText(who, v), aside: <Icon name="next" className="sr-go" />,
   run: () => open(who, v),
 });
+const wellbeingItem = (card: WellbeingCard): Item => ({
+  id: "w:" + card.id, icon: <span className="pl-ic tone-health"><Icon name="heart" /></span>,
+  title: card.title, sub: card.sub, wellbeing: card,
+  run: () => card.action ? openExternalLink(card.action.url) : card.placeKey && selectPlace(card.placeKey, true),
+});
 
 function search(query: string, open: (who: Who, v: string) => void, expanded: Set<string>, date: string, t: number): Group[] {
   const q = normQuery(query);
@@ -157,6 +163,13 @@ function search(query: string, open: (who: Who, v: string) => void, expanded: Se
 
   const quick = QUICK.filter((x) => x.words.split(" ").some((w) => w.startsWith(q) || (q.length > 3 && q.startsWith(w))));
   add("quick", "Быстро", quick.map((x) => ({ id: "q:" + x.id, icon: <QuickIcon q={x} />, title: x.title, sub: x.sub, run: x.run })), 3);
+
+  const wellbeing = WELLBEING.map((card) => ({ card, s: Math.min(...[card.title, card.keywords, card.sub].map((x) => {
+    const match = score(x, q);
+    return match < 0 ? 99 : match;
+  })) }))
+    .filter(({ s }) => s < 99).sort((a, b) => a.s - b.s);
+  add("wellbeing", "Поддержка и запись", wellbeing.map(({ card }) => wellbeingItem(card)), 6);
 
   const rooms: { p: Place; s: number }[] = [], places: { p: Place; s: number }[] = [];
   const seen = new Set<string>();
@@ -279,6 +292,7 @@ function SearchPanel() {
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") { e.preventDefault(); if (detail) setDetail(null); else if (query) setQuery(""); else closeSearch(); return; }
     if (detail) return;
+    if (e.key === "Enter" && (e.target as HTMLElement).closest(".sr-wellbeing-actions")) return;
     if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(flat.length - 1, a + 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
     else if (e.key === "Enter" && flat[active]) { e.preventDefault(); run(flat[active]); }
@@ -287,6 +301,18 @@ function SearchPanel() {
   let n = 0;
   const row = (it: Item) => {
     const i = n++;
+    if (it.wellbeing) {
+      const card = it.wellbeing;
+      return <li key={it.id}>
+        <div className={cx("sr-wellbeing", i === active && "on")} onPointerMove={() => i !== active && setActive(i)}>
+          <div className="sr-wellbeing-head">{it.icon}<span className="sr-t"><b>{it.title}</b><small>{it.sub}</small></span></div>
+          <div className="sr-wellbeing-actions">
+            {card.action && <button className="sr-wellbeing-primary" onClick={() => run(it)}>{card.action.label}</button>}
+            {card.placeKey && <button onClick={() => { closeSearch(); selectPlace(card.placeKey!, true); }}>На плане</button>}
+          </div>
+        </div>
+      </li>;
+    }
     return (
       <li key={it.id}>
         <button className={cx("sr-item", i === active && "on")} onClick={() => run(it)} onPointerMove={() => i !== active && setActive(i)}>
@@ -318,7 +344,7 @@ function SearchPanel() {
             <ul>{recent.map(row)}</ul>
           </section>
         )}
-        <p className="sr-tip">Ищите аудиторию («318», «т318»), место («кухня», «переговорная»), преподавателя, предмет или поток.</p>
+        <p className="sr-tip">Ищите аудиторию («318», «т318»), место, психолога, врача, социального педагога, преподавателя, предмет или поток.</p>
       </>
     );
   } else if (!groups.length) {
@@ -340,7 +366,7 @@ function SearchPanel() {
           <label className="sr-field">
             <Icon name="search" />
             <input ref={input} type="search" enterKeyHint="search" autoComplete="off" spellCheck={false}
-              placeholder="Аудитория, место, преподаватель, предмет" value={query}
+              placeholder="Аудитория, место, специалист, преподаватель" value={query}
               onChange={(e) => { setQuery(e.target.value); setDetail(null); setExpanded(new Set()); }} />
             {query && (
               <button className="sr-clear" title="Очистить" onPointerDown={(e) => e.preventDefault()}
