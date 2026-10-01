@@ -1449,6 +1449,7 @@ button.join { background: transparent; }
 .sr-wellbeing-head { display: flex; align-items: flex-start; gap: 10px; }
 .sr-wellbeing .sr-t { gap: 2px; }
 .sr-wellbeing .sr-t b, .sr-wellbeing .sr-t small { white-space: normal; }
+.sr-wellbeing .pl-open-status { padding-left: 46px; }
 .sr-wellbeing-actions { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 46px; }
 .sr-wellbeing-actions button { min-height: 32px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--ink); font-size: 12px; font-weight: 600; }
 .sr-wellbeing-actions button:hover { border-color: var(--accent-ink); }

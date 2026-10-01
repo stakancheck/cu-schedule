@@ -8,7 +8,7 @@ import { closeSearch, openRoute, openSearch, pickRoom, selectPlace, setHighlight
 import { addDays, cx, isPhone, lsGet, lsSet, norm, nowMin, parseIso, todayIso } from "../lib/util";
 import { openExternalLink } from "../lib/telegram";
 import { allPlaces, getPlace, normQuery, placeWhere, type Place } from "../nav/places";
-import { infoText, WELLBEING, type WellbeingCard } from "../nav/info";
+import { infoText, isOpenAt, placeInfo, WELLBEING, type WellbeingCard } from "../nav/info";
 import { PlaceIcon } from "./Place";
 import { statusText } from "./Room";
 import { Icon, type IconName } from "./icons";
@@ -264,7 +264,7 @@ export function SearchLayer() {
 }
 
 function SearchPanel() {
-  const date = useApp((s) => s.date), t = useApp((s) => s.t);
+  const date = useApp((s) => s.date), t = useApp((s) => s.t), live = useApp((s) => s.live);
   const [query, setQuery] = useState("");
   const [detail, setDetail] = useState<{ who: Who; v: string } | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -303,9 +303,16 @@ function SearchPanel() {
     const i = n++;
     if (it.wellbeing) {
       const card = it.wellbeing;
+      const place = card.placeKey ? getPlace(card.placeKey) : undefined;
+      const weekly = card.weekly ?? (place ? placeInfo(place).note?.weekly : undefined);
+      const open = weekly ? isOpenAt(weekly, date, t) : null;
       return <li key={it.id}>
         <div className={cx("sr-wellbeing", i === active && "on")} onPointerMove={() => i !== active && setActive(i)}>
           <div className="sr-wellbeing-head">{it.icon}<span className="sr-t"><b>{it.title}</b><small>{it.sub}</small></span></div>
+          {open !== null && <div className="pl-open-status">
+            <span className={cx("pl-open-pill", open ? "open" : "closed")}>{open ? "Открыто" : "Закрыто"}</span>
+            <small>{live ? "сейчас" : "на выбранное время"}</small>
+          </div>}
           <div className="sr-wellbeing-actions">
             {card.action && <button className="sr-wellbeing-primary" onClick={() => run(it)}>{card.action.label}</button>}
             {card.placeKey && <button onClick={() => { closeSearch(); selectPlace(card.placeKey!, true); }}>На плане</button>}
