@@ -44,7 +44,10 @@ export type Wc = [number, number, number, "f" | "m" | "a"];
  * На плане рисуются как пустота с контуром стены, маршрут их обходит.
  * Накладываются на план при загрузке (lib/schedule.ts), сгенерированные файлы не трогаем. */
 export type Hole = [number, number, number, number];
-export interface CampusNav { metersPerUnit: number; links: Link[]; entrances: Entrance[]; wc: Wc[]; holes?: Record<number, Hole[]>; cabs?: Cab[] }
+/* Подпись, которой нет в PDF (из обращений на плане): появляется на плане и в поиске как обычная.
+ * Добавляется в конец подписей этажа, чтобы номера остальных не сдвинулись. */
+export interface ExtraLabel { floor: number; text: string; at: Pt; color?: string }
+export interface CampusNav { metersPerUnit: number; links: Link[]; entrances: Entrance[]; wc: Wc[]; holes?: Record<number, Hole[]>; cabs?: Cab[]; labels?: ExtraLabel[] }
 
 /* Дукат: листы этажей сдвинуты относительно 1 этажа (по группе лифтов).
  * Точки, снятые на 1 этаже, переносим на другие этажи этим сдвигом. */
@@ -113,6 +116,9 @@ export const NAV: Record<string, CampusNav> = {
 
   DUCAT: {
     metersPerUnit: 0.042,
+    labels: [
+      { floor: 3, text: "Турник", at: [1383.9, 1022], color: "fitness" }, // рядом с вендоматом, обращение #1
+    ],
     // На 2 этаже PDF рисует между корпусами B и F сплошной пол, на деле переходы как на 4 этаже:
     // два глухих блока и три прохода (у западной стены, посередине, у восточной).
     // Блоки 4 этажа, сдвинутые на 100 влево: так сдвинут лист 2 этажа (см. лестницы и лифты).

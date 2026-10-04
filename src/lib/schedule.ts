@@ -33,6 +33,10 @@ for (const [cid, nav] of Object.entries(NAV)) {
     }
   }
 }
+// Подписи, которых нет в PDF
+for (const [cid, nav] of Object.entries(NAV)) {
+  for (const l of nav.labels || []) CAMPUSES[cid]?.floors[l.floor]?.labels.push({ text: l.text, color: l.color || "", x: l.at[0], y: l.at[1], big: false });
+}
 const S = window.SCHEDULE;
 const str = S.strings;
 export const updatedAt = S.updatedAt;
