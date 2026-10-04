@@ -2,7 +2,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CAMPUSES, autoSummary, floorNums } from "../lib/schedule";
 import { useApp } from "../lib/store";
-import { openRoute, planCtl, setCampus, setFloor } from "../lib/actions";
+import { openRoute, planCtl, setCampus, setFloor, setSide } from "../lib/actions";
 import { inTg, syncTgColors, tg } from "../lib/telegram";
 import { cx, lsGet, lsSet } from "../lib/util";
 import { PlanRenderer } from "../plan/PlanRenderer";
@@ -44,6 +44,17 @@ function ThemeButton() {
       <svg className="ic ic-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" /><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" /></svg>
       <svg className="ic ic-light" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
       <svg className="ic ic-dark" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" /></svg>
+    </button>
+  );
+}
+
+// Компьютер: показать или скрыть правую колонку (на время маршрута она открыта сама)
+function SideButton() {
+  const open = useApp((s) => s.side), routing = useApp((s) => s.route.open);
+  return (
+    <button className={cx("icon-btn side-btn", open && "on")} disabled={routing} aria-pressed={open}
+      title={open ? "Скрыть панель" : "Показать панель: расписание и свободные аудитории"} onClick={() => setSide(!open)}>
+      <Icon name="panel" />
     </button>
   );
 }
@@ -135,6 +146,7 @@ function PlanBar() {
       <div className="spacer" />
       <SearchButton />
       <ThemeButton />
+      <SideButton />
       <div className="floor-title">
         <div className="floor-n">Этаж {floor}</div>
         <Marquee className="floor-sum" text={autoSummary(c, floor)} />

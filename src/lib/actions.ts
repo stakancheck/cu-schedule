@@ -114,7 +114,18 @@ export function revealSelection(card: HTMLElement | null) {
   planCtl.current?.reveal(box, parseFloat(getComputedStyle(card).bottom) + card.offsetHeight - gap);
 }
 
-export const openRoomScreen = () => { if (getState().room) setState({ roomScreen: true }); };
+// Правая колонка на компьютере: открыть или скрыть, выбор запоминаем
+export function setSide(open: boolean) {
+  lsSet("cu.side", open ? "1" : null);
+  setState({ side: open });
+}
+
+// Расписание аудитории: на телефоне свой экран, на компьютере правая колонка - открываем её
+export const openRoomScreen = () => {
+  if (!getState().room) return;
+  setState({ roomScreen: true });
+  if (!isPhone()) setSide(true);
+};
 export const closeRoomScreen = () => setState({ roomScreen: false });
 export const openFreeScreen = () => setState({ freeScreen: true });
 export const closeFreeScreen = () => setState({ freeScreen: false });
@@ -175,7 +186,8 @@ const isPoint = (k: string | null) => { const p = getPlace(k); return !p || p.ki
 
 export function openRoute({ from, to }: { from?: string | null; to?: string | null } = {}) {
   const r = getState().route;
-  let nf = from || r.from, nt = to || r.to;
+  // «Отсюда» начинает маршрут заново: прошлую цель не подставляем
+  let nf = from || r.from, nt = to || (from ? null : r.to);
   // Точка, указанная на плане, разовая: в следующий раз не подставляем
   if (!to && nt && isPoint(nt)) nt = null;
   const cid = getPlace(nt)?.campus || getPlace(nf)?.campus || getState().campus;

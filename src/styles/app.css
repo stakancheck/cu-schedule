@@ -467,6 +467,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   z-index: 5;
 }
 .tooltip b { font-size: 14px; }
+.tooltip .tip-code {
+  display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 4px; vertical-align: 1px;
+  background: var(--panel); color: var(--ink); font-size: 12px; font-weight: 700;
+}
 
 /* SVG-слои плана */
 .v-street { fill: var(--ink-3); opacity: .7; }
@@ -510,6 +514,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 
 .tagbox { fill: var(--tag); }
 .tagtxt { fill: var(--tag-ink); font-weight: 500; text-anchor: middle; dominant-baseline: central; }
+/* номер помещения внутри плашки с названием: светлая вставка, как наклейка с номером на двери */
+.tagcode-box { fill: var(--panel); }
+.tagcode { fill: var(--ink); font-weight: 700; text-anchor: middle; dominant-baseline: central; }
 .tag-kitchen .tagbox { fill: var(--kitchen-tag); }
 .tag-kitchen .tagtxt, .tag-staff .tagtxt, .tag-wip .tagtxt { fill: #fff; }
 .tag-staff .tagbox { fill: var(--staff-tag); }
@@ -1186,6 +1193,16 @@ button.join { background: transparent; }
 .rt-field.filled .rt-clear { display: grid; }
 .rt-clear:hover { background: color-mix(in srgb, var(--ink) 20%, transparent); color: var(--ink); }
 .rt-clear svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.rt-field.blank input { padding-right: 104px; }
+.rt-pickmap {
+  position: absolute; right: 6px; top: 50%; translate: 0 -50%;
+  display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px 5px 7px;
+  border: 0; border-radius: 8px; background: var(--accent-soft); color: var(--accent-ink);
+  font: inherit; font-size: 13px; font-weight: 600; white-space: nowrap; transition: background .2s;
+}
+.rt-pickmap:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.rt-pickmap svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.rt-field.blank .rt-clear { right: 106px; }
 .rt-swap { align-self: center; }
 
 .rt-sugg {
@@ -1278,8 +1295,6 @@ button.join { background: transparent; }
 .rs-prev { border: 1px solid var(--line); background: transparent; border-radius: var(--radius-s); padding: 10px; font-weight: 500; }
 .rs-prev:hover:not(:disabled) { border-color: var(--ink-3); }
 
-.rt-sg-ic.map { background: var(--accent); color: #fff; }
-.rt-sg-ic.map svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .app.picking #plan { cursor: crosshair; }
 .app.picking .route-sheet, .app.picking .tp-row, .app.picking .time-island { display: none !important; }
 .pick-bar {
@@ -1371,18 +1386,6 @@ button.join { background: transparent; }
 .place-screen .pl-sim-list { flex-wrap: wrap; }
 
 /* ------------------------------------------------------------ Поиск */
-.search-btn {
-  display: inline-flex; align-items: center; gap: 8px; height: 34px; min-width: 190px;
-  padding: 0 6px 0 10px; border: 1px solid var(--line); border-radius: var(--radius-s);
-  background: transparent; color: var(--ink-3); transition: border-color .2s, background .2s;
-}
-.search-btn:hover { background: var(--chip); border-color: var(--ink-3); color: var(--ink-2); }
-.search-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
-.search-btn .sb-t { flex: 1; text-align: left; }
-.search-btn kbd {
-  font: 500 11px/1 inherit; color: var(--ink-3); padding: 4px 6px; border-radius: 5px;
-  background: var(--chip); border: 1px solid var(--line);
-}
 
 .search-layer {
   position: fixed; inset: 0; z-index: 50;
@@ -1446,6 +1449,7 @@ button.join { background: transparent; }
 .sr-item.on { background: var(--chip); }
 .sr-wellbeing { display: grid; gap: 8px; margin: 5px 8px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--elev); }
 .sr-wellbeing.on { border-color: var(--accent-ink); }
+.sr-wellbeing.go { cursor: pointer; }
 .sr-wellbeing-head { display: flex; align-items: flex-start; gap: 10px; }
 .sr-wellbeing .sr-t { gap: 2px; }
 .sr-wellbeing .sr-t b, .sr-wellbeing .sr-t small { white-space: normal; }
@@ -1503,6 +1507,54 @@ button.join { background: transparent; }
 
 /* Мобильные элементы на десктопе скрыты */
 .tabbar, .room-peek, .sr-cancel { display: none; }
+
+/* Карточки поверх плана: на телефоне всегда, на компьютере - когда правая колонка скрыта */
+/* Карточка выбранной аудитории поверх плана: статус, текущая или следующая пара, действия */
+.room-peek {
+  flex-direction: column; gap: 9px;
+  position: absolute; z-index: 5; left: 10px; right: 10px; bottom: calc(var(--tab-space) + 8px);
+  padding: 12px 12px 12px 14px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .18);
+  animation: peek-in .25s cubic-bezier(.2, 0, .3, 1);
+}
+.pk-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pk-head b { font-size: 20px; font-weight: 600; line-height: 1; }
+.pk-where { color: var(--ink-2); font-size: 12px; white-space: nowrap; }
+.pk-head .status-pill { margin: 0 0 0 auto; padding: 2px 7px; font-size: 11px; white-space: nowrap; }
+.pk-x {
+  flex: none; display: grid; place-items: center; width: 28px; height: 28px; padding: 0;
+  border: 0; border-radius: 50%; background: var(--chip); color: var(--ink-2);
+}
+.pk-x svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.pk-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--accent-ink); }
+.pk-ev .ev { grid-template-columns: 48px 1fr; padding: 6px 0 0; border-bottom: 0; }
+.pk-ev .ev.now::before, .pk-ev .ev.now .t::after { display: none; }
+.pk-ev .ev .title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pk-empty { margin: 0; color: var(--ink-2); font-size: 13px; }
+.room-peek .timeline { height: 8px; margin: 0; }
+.pk-actions { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 6px; }
+.pk-actions button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 1px solid var(--line); background: transparent; color: var(--ink);
+  border-radius: var(--radius-s); padding: 9px 6px; font-size: 13px; font-weight: 600;
+}
+.pk-actions .pk-to { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pk-actions svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+/* карточка места поверх плана: те же правила, что у карточки аудитории */
+.place-peek { gap: 10px; }
+.place-peek .pk-head { align-items: flex-start; gap: 10px; }
+/* раскрытые нюансы листаются внутри карточки, план остаётся видно */
+.place-peek .pl-about { font-size: 14px; max-height: 42vh; overflow-y: auto; overscroll-behavior: contain; }
+.pk-actions.pl-actions { grid-template-columns: 1fr 1fr; }
+
+/* Компьютер: правая колонка скрывается кнопкой, план занимает всю ширину */
+.side-btn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
+@media (min-width: 901px) {
+  .app.side-closed { grid-template-columns: minmax(0, 1fr); }
+  .app.side-closed .side { display: none; }
+  .app.side-closed .room-peek { display: flex; left: 14px; right: auto; bottom: 64px; width: 380px; max-width: calc(100% - 28px); }
+}
 
 /* ------------------------------------------------------------ Мобилка */
 @media (max-width: 900px) {
@@ -1568,7 +1620,7 @@ button.join { background: transparent; }
   /* План на весь блок, управление плавает поверх стеклянными колонками */
   .plan-pane { position: relative; }
   .plan-bar { display: contents; }
-  .plan-bar .spacer, .floor-title, #themeBtn { display: none; }
+  .plan-bar .spacer, .floor-title, #themeBtn, .side-btn { display: none; }
   .nav-col {
     display: flex; align-items: flex-start; gap: 8px;
     position: absolute; z-index: 3; top: calc(8px + var(--safe-top)); left: 8px; right: 8px;
@@ -1605,38 +1657,7 @@ button.join { background: transparent; }
   .time-island { right: 10px; width: auto; z-index: 6; }
   .plan-wrap:has(.room-peek) .tp-row, .plan-wrap:has(.time-island) .route-fab { display: none; }
 
-  /* Карточка выбранной аудитории поверх плана: статус, текущая или следующая пара, действия */
-  .room-peek {
-    display: flex; flex-direction: column; gap: 9px;
-    position: absolute; z-index: 5; left: 10px; right: 10px; bottom: calc(var(--tab-space) + 8px);
-    padding: 12px 12px 12px 14px;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
-    box-shadow: 0 12px 34px rgba(0, 0, 0, .18);
-    animation: peek-in .25s cubic-bezier(.2, 0, .3, 1);
-  }
-  .pk-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
-  .pk-head b { font-size: 20px; font-weight: 600; line-height: 1; }
-  .pk-where { color: var(--ink-2); font-size: 12px; white-space: nowrap; }
-  .pk-head .status-pill { margin: 0 0 0 auto; padding: 2px 7px; font-size: 11px; white-space: nowrap; }
-  .pk-x {
-    flex: none; display: grid; place-items: center; width: 28px; height: 28px; padding: 0;
-    border: 0; border-radius: 50%; background: var(--chip); color: var(--ink-2);
-  }
-  .pk-x svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
-  .pk-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--accent-ink); }
-  .pk-ev .ev { grid-template-columns: 48px 1fr; padding: 6px 0 0; border-bottom: 0; }
-  .pk-ev .ev.now::before, .pk-ev .ev.now .t::after { display: none; }
-  .pk-ev .ev .title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .pk-empty { margin: 0; color: var(--ink-2); font-size: 13px; }
-  .room-peek .timeline { height: 8px; margin: 0; }
-  .pk-actions { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 6px; }
-  .pk-actions button {
-    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    border: 1px solid var(--line); background: transparent; color: var(--ink);
-    border-radius: var(--radius-s); padding: 9px 6px; font-size: 13px; font-weight: 600;
-  }
-  .pk-actions .pk-to { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .pk-actions svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .room-peek { display: flex; }
 
   /* Расписание аудитории - отдельный экран без меню */
   .app.room-mode .tabbar { display: none; }
@@ -1750,7 +1771,6 @@ button.join { background: transparent; }
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 6px 20px rgba(0, 0, 0, .14);
   }
   .search-btn svg { width: 20px; height: 20px; }
-  .search-btn .sb-t, .search-btn kbd { display: none; }
   .map-ctl .compass { top: calc(58px + var(--safe-top)); }
   .app.routing .search-btn { display: none; }
   .app.routing .nav-col { right: 8px; }
@@ -1770,12 +1790,6 @@ button.join { background: transparent; }
   .sr-quick button { grid-template-rows: auto; align-items: center; min-height: 64px; }
   .sr-quick .sr-qimg { grid-row: auto; width: 40px; height: 40px; }
 
-  /* карточка места поверх плана: те же правила, что у карточки аудитории */
-  .place-peek { gap: 10px; }
-  .place-peek .pk-head { align-items: flex-start; gap: 10px; }
-  /* раскрытые нюансы листаются внутри карточки, план остаётся видно */
-  .place-peek .pl-about { font-size: 14px; max-height: 42vh; overflow-y: auto; overscroll-behavior: contain; }
-  .pk-actions.pl-actions { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 900px) and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .search-btn { box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 6px 20px rgba(0,0,0,.45); }

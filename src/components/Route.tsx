@@ -61,7 +61,7 @@ function PlaceField({ field, edit, setEdit }: { field: Field; edit: Edit; setEdi
   const mine = edit?.field === field;
   const value = mine ? edit.query : place ? placeName(place) : "";
   return (
-    <label className={cx("rt-field", mine && "on", (value || place) && "filled")}>
+    <label className={cx("rt-field", mine && "on", (value || place) && "filled", !value && "blank")}>
       <span className="sr">{field === "from" ? "Откуда" : "Куда"}</span>
       <input ref={input} id={field === "from" ? "rtFrom" : "rtTo"} type="text" autoComplete="off" enterKeyHint="done"
         placeholder={field === "from" ? "Откуда" : "Куда: аудитория, кухня, вход"} value={value}
@@ -87,6 +87,13 @@ function PlaceField({ field, edit, setEdit }: { field: Field; edit: Edit; setEdi
           <Icon name="close" />
         </button>
       )}
+      {!value && (
+        <button className="rt-pickmap" type="button"
+          onPointerDown={(e) => e.preventDefault() /* не забираем фокус у поля */}
+          onClick={(e) => { e.preventDefault(); setEdit(() => null); startPick(field); }}>
+          <Icon name="pin" />На карте
+        </button>
+      )}
     </label>
   );
 }
@@ -106,10 +113,6 @@ function Suggestions({ field, query, onChosen }: { field: Field; query: string; 
   };
   return (
     <ul className="rt-sugg" id="rtSugg">
-      <li><button data-pickmap="1" onPointerDown={(e) => choose(e, () => startPick(field))}>
-        <span className="rt-sg-ic map"><Icon name="pin" /></span>
-        <span className="rt-sg-t"><b>Указать на карте</b><small>нажмите на нужное место на плане</small></span>
-      </button></li>
       {list.map(({ p, hint }) => (
         <li key={p.key}><button data-place={p.key} onPointerDown={(e) => choose(e, () => setRoutePlace(field, p.key))}>
           <span className={cx("rt-sg-ic", p.kind)}>{sgIcon(p)}</span>

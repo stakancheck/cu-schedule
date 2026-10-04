@@ -34,7 +34,7 @@ for (const c of Object.values(CAMPUSES)) {
       const label = r.label || (!cls && NOTES[r.id]?.title) || "";
       all.set("r:" + r.id, {
         key: "r:" + r.id, kind: cls ? "room" : "space", room: r.id, campus: c.id, floor: f.n, x, y,
-        title: cls ? r.id : label || `Помещение ${r.id}`, sub: cls || !label ? "" : r.id, food: FOOD.test(label),
+        title: cls ? r.id : NOTES[r.id]?.title || label || `Помещение ${r.id}`, sub: cls || !label ? "" : r.id, food: FOOD.test(label),
         label, color: r.color,
       });
     }

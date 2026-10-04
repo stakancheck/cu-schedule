@@ -37,6 +37,8 @@ CAMPUSES = {
         "src": "Downloads/plan-ducat.pdf", "out": "public/data/plans-ducat.js",
         "code": r"^(B\d{3,4}|F\d{3})$",
         "halls": {"F101", "B1004", "B1006"},  # действительно большие залы
+        # плашка аудитории лежит не в своей комнате: контур задаём руками, единицы плана
+        "shapes": {"B205": [[1491.9, 471.9], [1491.9, 623.8], [1618.1, 623.8], [1618.1, 471.9]]},
         # проёмы закрываем морфологией по линиям: пробуемые ширины, pt
         "gaps": "close", "doors": [26, 40, 60, 90],
         "open": 10,   # pt: отростки уже этого срезаем
@@ -499,6 +501,8 @@ def parse_page(page, floor_n, cfg):
         pts, area, sol, _door, key = room_shape(r["anchor"], [o["anchor"] for o in rooms if o is not r])
         if sol <= 0.85 and area >= MAX_ROOM and r["id"] not in cfg["halls"]:
             pts, key = [], None  # протекло в коридор: оставляем только подпись
+        if r["id"] in cfg.get("shapes", {}):
+            pts, key = cfg["shapes"][r["id"]], ("shape", r["id"])
         seen_label.setdefault(key, []).append(r["id"])
         a = r["anchor"]
         out_rooms.append({

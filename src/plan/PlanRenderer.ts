@@ -4,11 +4,11 @@
 import type { Campus, Floor, PlanRoom, StreetText } from "../types";
 import { CAMPUSES, centroid, roomFloor, roomStatus } from "../lib/schedule";
 import { getState, setState, subscribe, type AppState } from "../lib/store";
-import { planCtl, pickPoint, selectPlace, selectRoom, tapPlaceInRoute, type Box, type FocusOpts } from "../lib/actions";
+import { bboxOf, planCtl, pickPoint, selectPlace, selectRoom, tapPlaceInRoute, type Box, type FocusOpts } from "../lib/actions";
 import { fmt, isPhone, reduceMotion } from "../lib/util";
 import { debugImage, links } from "../nav/engine";
 import { getPlace, iconPlace, labelPlace } from "../nav/places";
-import { CATS, placeInfo } from "../nav/info";
+import { CATS, NOTES, placeInfo } from "../nav/info";
 import { filterOn } from "../nav/filters";
 import { NAV } from "../nav/data";
 import { CITY_IC, RT_IC } from "../components/icons";
@@ -173,6 +173,20 @@ export class PlanRenderer {
     return g;
   }
 
+  // Помещение с названием: название и номер отдельной светлой плашкой внутри, чтобы номер читался сразу
+  private namedTag(parent: Element, name: string, code: string, cls: string) {
+    const size = 11, hh = size * 1.9, pad = 6, gap = 5;
+    const nameW = name.length * size * 0.58, codeW = code.length * size * 0.66 + 8;
+    const w = pad + nameW + gap + codeW + 3;
+    const g = el("g", { class: cls }, parent);
+    el("rect", { class: "tagbox", x: -w / 2, y: -hh / 2, width: w, height: hh, rx: 3 }, g);
+    el("text", { class: "tagtxt", "font-size": size, x: -w / 2 + pad + nameW / 2 }, g).textContent = name;
+    const cx = w / 2 - 3 - codeW / 2;
+    el("rect", { class: "tagcode-box", x: cx - codeW / 2, y: -hh / 2 + 3, width: codeW, height: hh - 6, rx: 2.5 }, g);
+    el("text", { class: "tagcode", "font-size": size, x: cx }, g).textContent = code;
+    return g;
+  }
+
   // Серые подписи: вдоль улицы или стрелки (при повороте плана не встают
   // вверх ногами) либо блоком строк, который всегда стоит вертикально
   private streetText(parent: Element, s: StreetText) {
@@ -313,12 +327,16 @@ export class PlanRenderer {
       if (pl) this.asPlace(t, pl.key); else t.style.pointerEvents = "none";
     });
 
+    // парсер PDF иногда отдаёт двум аудиториям один контур (B205 и B207): подписи в центре легли бы друг на друга
+    const shapes = new Map<string, number>();
+    for (const r of floor.rooms) if (r.pts.length) shapes.set(ptsAttr(r.pts), (shapes.get(ptsAttr(r.pts)) || 0) + 1);
     for (const r of floor.rooms) {
-      if (roomFloor[r.id]) this.roomLabel(fg, r);
+      if (roomFloor[r.id]) this.roomLabel(fg, r, shapes.get(ptsAttr(r.pts))! > 1);
       else {
         const g = this.upright(fg, r.tag[0], r.tag[1]);
-        const text = r.label ? `${short(r.label)} · ${r.id}` : r.id;
-        const tagEl = this.tag(g, text, { size: 11, cls: isCowork(r) ? "tag-open" : TAG_CLS[r.color] || "", padX: 6 });
+        // название из справочника важнее подписи PDF («Центр благополучия» в B406 - это психолог)
+        const name = NOTES[r.id]?.title || r.label, cls = isCowork(r) ? "tag-open" : TAG_CLS[r.color] || "";
+        const tagEl = name ? this.namedTag(g, short(name), r.id, cls) : this.tag(g, r.id, { size: 11, cls, padX: 6 });
         this.asPlace(tagEl, getPlace("r:" + r.id)?.key);
       }
     }
@@ -334,11 +352,17 @@ export class PlanRenderer {
     if (NAV_DEBUG) this.debugStops(fg, floor.n);
   }
 
-  private roomLabel(parent: Element, r: PlanRoom) {
-    const [cx, cy] = centroid(r.pts);
+  private roomLabel(parent: Element, r: PlanRoom, shared = false) {
+    const w = r.id.length * 10.6 + 24;
+    let [cx, cy] = centroid(r.pts);
+    if (shared) {
+      // общий контур: подпись там, где плашка аудитории на PDF, но внутри контура
+      const b = bboxOf(r.pts), clamp = (v: number, a: number, z: number) => (a > z ? (a + z) / 2 : Math.min(z, Math.max(a, v)));
+      cx = clamp(r.tag[0], b.x + w / 2, b.x + b.width - w / 2);
+      cy = clamp(r.tag[1], b.y + 16, b.y + b.height - 34);
+    }
     const g = this.upright(parent, cx, cy);
     g.setAttribute("class", "room-lbl");
-    const w = r.id.length * 10.6 + 24;
     el("rect", { class: "tagbox", x: -w / 2, y: -14, width: w, height: 26, rx: 4 }, g);
     const dot = el("circle", { class: "dot", cx: -w / 2 + 9, cy: -1, r: 4 }, g);
     el("text", { class: "tagtxt code", x: 5, y: -1 }, g).textContent = r.id;
@@ -786,7 +810,8 @@ export class PlanRenderer {
       const pl = getPlace(((e.target as Element).closest?.("[data-place]") as SVGElement | null)?.dataset.place);
       if (!pl) return;
       const i = placeInfo(pl);
-      this.tip.innerHTML = `<b>${esc(pl.title)}</b><br><span style="opacity:.8">${esc(i.about || CATS[i.cat].name)}</span>`;
+      const code = pl.room && pl.title !== pl.room ? ` <span class="tip-code">${esc(pl.room)}</span>` : "";
+      this.tip.innerHTML = `<b>${esc(pl.title)}</b>${code}<br><span style="opacity:.8">${esc(i.about || CATS[i.cat].name)}</span>`;
       this.tip.hidden = false;
       return;
     }

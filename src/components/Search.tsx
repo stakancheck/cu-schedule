@@ -4,7 +4,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { byDate, CAMPUSES, eventsOn, evKind, roomCampus, roomFloor, roomStatus, type Ev } from "../lib/schedule";
 import { getState, setState, useApp } from "../lib/store";
-import { closeSearch, openRoute, openSearch, pickRoom, selectPlace, setHighlight, setView, showEvent } from "../lib/actions";
+import { closeSearch, openRoute, openSearch, pickRoom, selectPlace, setHighlight, setSide, setView, showEvent } from "../lib/actions";
 import { addDays, cx, isPhone, lsGet, lsSet, norm, nowMin, parseIso, todayIso } from "../lib/util";
 import { openExternalLink } from "../lib/telegram";
 import { allPlaces, getPlace, normQuery, placeWhere, type Place } from "../nav/places";
@@ -103,6 +103,7 @@ function openFree() {
   // свободные аудитории - экран общего списка пар, в режиме «мои пары» его нет
   setState({ freeScreen: true, mine: false, room: null, place: null, roomScreen: false });
   if (isPhone()) setView("list");
+  else setSide(true);
 }
 // run - действие; места одного типа (туалеты, поесть) не ведут маршрутом, а подсвечиваются на плане
 interface Quick { id: string; title: string; sub: string; img: string; words: string; run: () => void }
@@ -144,10 +145,16 @@ const whoItem = (who: Who, v: string, open: (who: Who, v: string) => void): Item
   title: v, sub: nextText(who, v), aside: <Icon name="next" className="sr-go" />,
   run: () => open(who, v),
 });
+// Место специалиста на плане: аудитория с расписанием открывается своей карточкой, остальное - как место
+function showPlace(key: string) {
+  const p = getPlace(key);
+  if (p?.kind === "room" && roomFloor[p.room!]) pickRoom(p.room!);
+  else selectPlace(key, true);
+}
 const wellbeingItem = (card: WellbeingCard): Item => ({
   id: "w:" + card.id, icon: <span className="pl-ic tone-health"><Icon name="heart" /></span>,
   title: card.title, sub: card.sub, wellbeing: card,
-  run: () => card.action ? openExternalLink(card.action.url) : card.placeKey && selectPlace(card.placeKey, true),
+  run: () => card.action ? openExternalLink(card.action.url) : card.placeKey && showPlace(card.placeKey),
 });
 
 function search(query: string, open: (who: Who, v: string) => void, expanded: Set<string>, date: string, t: number): Group[] {
@@ -307,7 +314,9 @@ function SearchPanel() {
       const weekly = card.weekly ?? (place ? placeInfo(place).note?.weekly : undefined);
       const open = weekly ? isOpenAt(weekly, date, t) : null;
       return <li key={it.id}>
-        <div className={cx("sr-wellbeing", i === active && "on")} onPointerMove={() => i !== active && setActive(i)}>
+        <div className={cx("sr-wellbeing", i === active && "on", card.placeKey && "go")} onPointerMove={() => i !== active && setActive(i)}
+          // нажатие на карточку показывает место на плане, кнопки внутри делают своё
+          onClick={(e) => { if (card.placeKey && !(e.target as HTMLElement).closest("button")) { closeSearch(); showPlace(card.placeKey); } }}>
           <div className="sr-wellbeing-head">{it.icon}<span className="sr-t"><b>{it.title}</b><small>{it.sub}</small></span></div>
           {open !== null && <div className="pl-open-status">
             <span className={cx("pl-open-pill", open ? "open" : "closed")}>{open ? "Открыто" : "Закрыто"}</span>
@@ -315,7 +324,7 @@ function SearchPanel() {
           </div>}
           <div className="sr-wellbeing-actions">
             {card.action && <button className="sr-wellbeing-primary" onClick={() => run(it)}>{card.action.label}</button>}
-            {card.placeKey && <button onClick={() => { closeSearch(); selectPlace(card.placeKey!, true); }}>На плане</button>}
+            {card.placeKey && <button onClick={() => { closeSearch(); showPlace(card.placeKey!); }}>На плане</button>}
           </div>
         </div>
       </li>;
@@ -388,14 +397,12 @@ function SearchPanel() {
   );
 }
 
-// Кнопка поиска: на компьютере поле в шапке плана, на телефоне круглая кнопка поверх плана
+// Кнопка поиска: на компьютере иконка в шапке плана рядом с темой, на телефоне круглая кнопка поверх плана
 export function SearchButton() {
   const mac = /Mac|iPhone|iPad/.test(navigator.platform);
   return (
-    <button className="search-btn" onClick={openSearch} title="Поиск" aria-label="Поиск">
+    <button className="icon-btn search-btn" onClick={openSearch} title={`Поиск (${mac ? "⌘K" : "Ctrl K"})`} aria-label="Поиск">
       <Icon name="search" />
-      <span className="sb-t">Поиск</span>
-      <kbd>{mac ? "⌘K" : "Ctrl K"}</kbd>
     </button>
   );
 }

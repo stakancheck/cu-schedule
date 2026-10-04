@@ -43,6 +43,7 @@ export interface AppState {
   guide: number | null;      // инструкция подключения календаря: открытый слайд или null
   search: boolean;           // открыт общий поиск
   highlight: string | null;  // подсвеченные на плане места одного типа (ключ из nav/filters): туалеты, где поесть
+  side: boolean;             // компьютер: правая колонка открыта (по умолчанию скрыта, выбор запоминается)
 }
 
 export const emptyRoute: RouteState = {
@@ -55,6 +56,7 @@ function initialState(): AppState {
     room: null, place: null, roomScreen: false, freeScreen: false, angle: 0, view: "plan",
     mine: account.enabled && (lsGet("cu.mode") ? lsGet("cu.mode") === "mine" : !!account.user),
     query: "", showPast: false, route: emptyRoute, toast: null, guide: null, search: false, highlight: null,
+    side: lsGet("cu.side") === "1",
   };
   const h = new URLSearchParams(location.hash.slice(1));
   const c = h.get("c");

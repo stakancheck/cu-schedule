@@ -86,6 +86,8 @@ export function App() {
   const guide = useApp((s) => s.guide !== null);
   const routeOpen = useApp((s) => s.route.open), step = useApp((s) => s.route.step), picking = useApp((s) => s.route.picking);
   const phone = usePhone();
+  // компьютер: колонку открывают кнопкой; маршрут строится в ней, поэтому на время маршрута она видна
+  const sideOpen = useApp((s) => s.side) || routeOpen;
   const body = useRef<HTMLDivElement>(null), sched = useRef<HTMLDivElement>(null);
 
   // на телефоне расписание аудитории - отдельный экран, на компьютере - правая колонка
@@ -145,7 +147,7 @@ export function App() {
   }
 
   return (
-    <div className={cx("app", routeOpen && "routing", guiding && "guiding", isPicking && "picking", phone && roomMode && "room-mode", phone && freeMode && "free-mode")} id="app" data-view={view}>
+    <div className={cx("app", routeOpen && "routing", guiding && "guiding", isPicking && "picking", phone && roomMode && "room-mode", phone && freeMode && "free-mode", !sideOpen && "side-closed")} id="app" data-view={view}>
       <PlanPane />
       <aside className="side">
         <SideHead />
