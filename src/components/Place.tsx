@@ -7,8 +7,8 @@ import { cx, norm } from "../lib/util";
 import { allPlaces, getPlace, placeWhere, type Place } from "../nav/places";
 import { CATS, isOpenAt, placeInfo } from "../nav/info";
 import { Icon } from "./icons";
+import { openReportAt } from "../lib/report";
 
-const CONTACT = "https://t.me/stakancheck";
 
 export function PlaceIcon({ p, className }: { p: Place; className?: string }) {
   const i = placeInfo(p), c = CATS[i.cat], brand = i.note?.brand;
@@ -80,7 +80,7 @@ function PlaceAbout({ p, limit = Infinity }: { p: Place; limit?: number }) {
       {!i.own && !n?.facts?.length && p.kind !== "link" && p.kind !== "wc" && (
         <p className="pl-ask">
           {i.about ? "Знаете подробности" : "Знаете, что здесь"}: что есть, когда открыто, кому можно?{" "}
-          <a href={CONTACT} target="_blank" rel="noopener">Напишите</a>, добавим.
+          <button className="pl-ask-btn" onClick={() => openReportAt(p.key)}>Напишите</button>, добавим.
         </p>
       )}
     </div>

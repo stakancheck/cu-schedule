@@ -5,7 +5,21 @@ compatibility_date = "2026-09-01"
 [vars]
 # С каких сайтов можно обращаться к API (localhost разрешён всегда)
 ALLOWED_ORIGINS = "https://stakancheck.github.io"
+# Куда складывать обращения с плана (issue)
+GITHUB_REPO = "stakancheck/cu-schedule"
 
 # Секрет задаётся отдельно и в репозиторий не попадает:
 #   npx wrangler@4 secret put SESSION_KEY
 # значение: 32 случайных байта в base64, например `openssl rand -base64 32`
+
+# Обращения: токен GitHub с правом только на Issues этого репозитория
+# (fine-grained, Repository permissions -> Issues: Read and write):
+#   npx wrangler@4 secret put GITHUB_TOKEN
+
+# Ограничение частоты: 3 обращения в минуту с одного адреса (поверх счётчиков в коде)
+[[ratelimits]]
+name = "FEEDBACK_RL"
+namespace_id = "1001"
+  [ratelimits.simple]
+  limit = 3
+  period = 60

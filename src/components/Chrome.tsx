@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp, type View } from "../lib/store";
 import { setView } from "../lib/actions";
+import { openReport } from "../lib/report";
 import { cx, lsGet, lsSet } from "../lib/util";
 import { Icon, type IconName } from "./icons";
 
@@ -50,6 +51,13 @@ export function Useful() {
           </a>
         ))}
       </section>
+      <section className="useful fb-useful">
+        <button className="link-card" onClick={() => openReport({ kind: "map" })}>
+          <span className="lc-ic lc-red"><Icon name="flag" /></span>
+          <span className="lc-text"><b>Нашли неточность на плане?</b><small>Отметьте место на карте или сообщите о сбое в приложении</small></span>
+          <span className="lc-arrow">›</span>
+        </button>
+      </section>
       <footer className="credits">
         <p className="unofficial">Неофициальный ресурс: не принадлежит Центральному университету и находится на стадии согласования с администрацией и командой платформы ЦУ.</p>
         <nav className="legal-links" aria-label="Правовые документы">
@@ -77,7 +85,7 @@ export function LegalNotice() {
         <b>Неофициальный сервис.</b> Он не от Центрального университета и находится на согласовании с администрацией и командой платформы ЦУ.
         Cookie и аналитики нет, настройки хранятся на вашем устройстве. <a href={LEGAL + "privacy.html"} target="_blank" rel="noopener">Подробнее</a>
       </p>
-      <button className="primary-btn" onClick={() => { lsSet("cu.legal", "1"); setOpen(false); }}>Понятно</button>
+      <button className="primary-btn" onClick={() => { lsSet("cu.legal", "1"); setOpen(false); window.dispatchEvent(new Event("cu:legal-done")); }}>Понятно</button>
     </div>
   );
 }

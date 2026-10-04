@@ -76,6 +76,8 @@ interface TgWebApp {
   setHeaderColor(c: string): void;
   setBackgroundColor(c: string): void;
   setBottomBarColor(c: string): void;
+  version: string;
+  initDataUnsafe?: { user?: { username?: string } };
   openLink(url: string): void;
   openTelegramLink(url: string): void;
   BackButton: { show(): void; hide(): void; onClick(fn: () => void): void };
@@ -83,6 +85,7 @@ interface TgWebApp {
 }
 
 declare global {
+  const __BUILD__: string; // хеш коммита и дата сборки (vite.config.ts)
   interface Window {
     CAMPUSES: Record<string, Campus>;
     SCHEDULE: ScheduleData;

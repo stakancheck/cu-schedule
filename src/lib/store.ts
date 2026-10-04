@@ -7,6 +7,18 @@ import { getPlace } from "../nav/places";
 import { FILTERS } from "../nav/filters";
 import type { Option } from "../nav/steps";
 
+/* Отметка на плане: куда указать при обращении. near - что рядом, чтобы не искать по координатам */
+export interface Pin { campus: CampusId; floor: number; x: number; y: number; room: string; near: string }
+export type ReportKind = "map" | "bug" | "idea";
+export interface ReportState {
+  kind: ReportKind;
+  picking: boolean;          // ждём нажатия на план: форма скрыта
+  pin: Pin | null;
+  text: string;
+  contact: string;
+  startedAt: number;         // когда открыли форму: слишком быстрые отправки считаем ботами
+}
+
 export type View = "plan" | "list" | "profile";
 export type Field = "from" | "to";
 
@@ -43,6 +55,8 @@ export interface AppState {
   guide: number | null;      // инструкция подключения календаря: открытый слайд или null
   search: boolean;           // открыт общий поиск
   highlight: string | null;  // подсвеченные на плане места одного типа (ключ из nav/filters): туалеты, где поесть
+  report: ReportState | null; // форма обращения: неточность на плане, ошибка, идея
+  mark: Pin | null;          // метка на плане из ссылки (#mk=x,y): куда указывало обращение
   side: boolean;             // компьютер: правая колонка открыта (по умолчанию скрыта, выбор запоминается)
 }
 
@@ -56,6 +70,7 @@ function initialState(): AppState {
     room: null, place: null, roomScreen: false, freeScreen: false, angle: 0, view: "plan",
     mine: account.enabled && (lsGet("cu.mode") ? lsGet("cu.mode") === "mine" : !!account.user),
     query: "", showPast: false, route: emptyRoute, toast: null, guide: null, search: false, highlight: null,
+    report: null, mark: null,
     side: lsGet("cu.side") === "1",
   };
   const h = new URLSearchParams(location.hash.slice(1));
@@ -80,6 +95,8 @@ function initialState(): AppState {
     s.campus = pl.campus;
     s.floor = pl.floor!;
   }
+  const mk = /^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/.exec(h.get("mk") || "");
+  if (mk && !s.room && !s.place) s.mark = { campus: s.campus, floor: s.floor, x: +mk[1], y: +mk[2], room: "", near: "" };
   const rot = h.get("rot");
   if (rot) s.angle = ((+rot % 360) + 360) % 360;
   const t = h.get("t");
@@ -133,6 +150,7 @@ function writeHash(s: AppState) {
   if (s.roomScreen && s.room) h.set("v", "room");
   else if (s.freeScreen && s.view === "list") h.set("v", "free");
   else if (s.view !== "plan") h.set("v", s.view);
+  if (s.mark && !s.report) h.set("mk", `${s.mark.x},${s.mark.y}`);
   if (s.route.open) {
     if (s.route.from) h.set("rf", s.route.from);
     if (s.route.to) h.set("rt", s.route.to);

@@ -8,7 +8,7 @@ import { cx, dayFmt, fmt, iso, lsSet, todayIso } from "../lib/util";
 import { Icon, type IconName } from "./icons";
 
 const LEGAL = import.meta.env.BASE_URL + "legal/";
-const CONSENT_VERSION = "1.0";
+const CONSENT_VERSION = "1.1";
 const APP_PASSWORDS = "https://id.yandex.ru/security/app-passwords";
 const HERO = import.meta.env.BASE_URL + "img/connect-hero.webp";
 // последний слайд инструкции - форма входа

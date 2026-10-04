@@ -19,6 +19,9 @@ if (!env.SESSION_KEY) {
   fs.appendFileSync(varsFile, `SESSION_KEY="${env.SESSION_KEY}"\n`);
 }
 
+// без токена обращения не уходят в GitHub, а печатаются в консоль
+if (!env.GITHUB_TOKEN) env.GITHUB_TOKEN = "dry";
+
 const port = +process.env.PORT || 8787;
 http.createServer(async (req, res) => {
   const chunks = [];

@@ -4,6 +4,7 @@
 import type { Campus, Floor, PlanRoom, StreetText } from "../types";
 import { CAMPUSES, centroid, roomFloor, roomStatus } from "../lib/schedule";
 import { getState, setState, subscribe, type AppState } from "../lib/store";
+import { pickReportPoint } from "../lib/report";
 import { bboxOf, planCtl, pickPoint, selectPlace, selectRoom, tapPlaceInRoute, type Box, type FocusOpts } from "../lib/actions";
 import { fmt, isPhone, reduceMotion } from "../lib/util";
 import { debugImage, links } from "../nav/engine";
@@ -86,6 +87,8 @@ export class PlanRenderer {
   private routeG: SVGGElement | null = null;
   private routeTop: SVGGElement | null = null;
   private routeMarks: Upright[] = [];
+  private markG: SVGGElement | null = null;   // метка обращения: куда указали «здесь неточность»
+  private markMarks: Upright[] = [];
   private campus: Campus;
   private CX = 0; private CY = 0;
   private viewAngle: number;
@@ -156,6 +159,7 @@ export class PlanRenderer {
     if (s.place !== prev.place) this.paintPlace();
     if (s.highlight !== prev.highlight) this.paintHighlight();
     if (s.route !== prev.route) this.paintRoute();
+    if (s.report?.pin !== prev.report?.pin || s.mark !== prev.mark) this.paintMark();
   }
 
   /* ---------- построение этажа */
@@ -219,6 +223,7 @@ export class PlanRenderer {
     this.paintPlace();
     this.paintHighlight();
     this.paintRoute();
+    this.paintMark();
   }
 
   // Подсвеченные места одного типа: их элементы выделены, над каждым метка одного размера на экране
@@ -349,6 +354,7 @@ export class PlanRenderer {
     this.hlG = el("g", { class: "place-hl" }, fg);
     this.selG = el("g", { class: "place-sel" }, fg);
     this.routeTop = el("g", { class: "route-top" }, fg);
+    this.markG = el("g", { class: "fb-mark-layer" }, fg);
     if (NAV_DEBUG) this.debugStops(fg, floor.n);
   }
 
@@ -398,6 +404,22 @@ export class PlanRenderer {
     el("path", { d: "M0,0C-3,-6 -11,-11 -11,-20A11,11 0 1 1 11,-20C11,-11 3,-6 0,0Z" }, g);
     el("circle", { cy: -20, r: 4.2 }, g);
     this.selMarks.push({ g, x: p.x!, y: p.y! });
+    this.applyTransform();
+  }
+
+  // Метка обращения: булавка с восклицательным знаком в отмеченной точке
+  private paintMark() {
+    if (!this.markG) return;
+    this.markG.textContent = "";
+    this.markMarks = [];
+    const s = getState(), pin = s.report?.pin ?? s.mark;
+    if (!pin || pin.campus !== s.campus || pin.floor !== s.floor) return;
+    const g = el("g", { class: "fb-mark" }, this.markG);
+    el("circle", { class: "fb-ring", r: 15 }, g);
+    const body = el("g", {}, g);
+    el("path", { d: "M0,0C-3,-6 -11,-11 -11,-20A11,11 0 1 1 11,-20C11,-11 3,-6 0,0Z" }, body);
+    el("path", { class: "fb-bang", d: "M0,-26V-19M0,-15.2V-14.6" }, body);
+    this.markMarks.push({ g, x: pin.x, y: pin.y });
     this.applyTransform();
   }
 
@@ -524,7 +546,7 @@ export class PlanRenderer {
     this.svg.style.setProperty("--u", u.toFixed(3) + "px");
     // вблизи иконки и подписи видны сами: метки подсветки их бы закрывали
     this.svg.classList.toggle("zoomed", this.zoom >= 2);
-    for (const l of [...this.routeMarks, ...this.selMarks, ...this.hlMarks]) l.g.setAttribute("transform", `translate(${l.x},${l.y}) rotate(${-a}) scale(${u.toFixed(3)})`);
+    for (const l of [...this.routeMarks, ...this.selMarks, ...this.hlMarks, ...this.markMarks]) l.g.setAttribute("transform", `translate(${l.x},${l.y}) rotate(${-a}) scale(${u.toFixed(3)})`);
     document.getElementById("dial")?.setAttribute("transform", `rotate(${a})`);
     document.getElementById("compassN")?.setAttribute("transform", `translate(0,-12) rotate(${-a})`);
     const off = Math.abs(a - Math.round(a / 360) * 360);
@@ -796,7 +818,9 @@ export class PlanRenderer {
     const p = this.worldPoint(e.clientX, e.clientY);
     if (NAV_DEBUG) console.log(`[${p.x.toFixed(1)}, ${p.y.toFixed(1)}]`, `этаж ${s.floor}`);
     const key = room ? "r:" + room : place;
-    if (s.route.open && s.route.picking) pickPoint(p.x, p.y);
+    if (s.mark && !s.report) setState({ mark: null });
+    if (s.report?.picking) pickReportPoint(p.x, p.y);
+    else if (s.route.open && s.route.picking) pickPoint(p.x, p.y);
     else if (key && s.route.open && s.route.step < 0) tapPlaceInRoute(key);
     else if (room) selectRoom(room === s.room ? null : room);
     else if (place) selectPlace(place === s.place ? null : place);

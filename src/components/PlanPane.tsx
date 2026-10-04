@@ -14,6 +14,8 @@ import { SearchButton } from "./Search";
 import { filterFloors } from "../nav/filters";
 import { TimeIsland } from "./TimeIsland";
 import { PickBar, RouteSheet } from "./Route";
+import { ReportPickBar } from "./Feedback";
+import { openReport } from "../lib/report";
 
 // Тема: как в системе -> светлая -> тёмная
 type Theme = "auto" | "light" | "dark";
@@ -164,6 +166,9 @@ function MapControls() {
         <button id="zoomIn" title="Приблизить" onClick={() => planCtl.current?.zoomBy(1.4)}><Icon name="plus" /></button>
         <button id="zoomOut" title="Отдалить" onClick={() => planCtl.current?.zoomBy(1 / 1.4)}><Icon name="minus" /></button>
       </div>
+      <div className="zoom-ctl fb-ctl">
+        <button id="reportBtn" title="Сообщить о неточности на плане" aria-label="Сообщить о неточности на плане" onClick={() => openReport({ kind: "map" })}><Icon name="flag" /></button>
+      </div>
     </div>
   );
 }
@@ -174,21 +179,22 @@ function PlanView() {
     const r = new PlanRenderer(svg.current!, wrap.current!, tip.current!);
     return () => r.destroy();
   }, []);
-  const routeOpen = useApp((s) => s.route.open);
+  const routeOpen = useApp((s) => s.route.open), reporting = useApp((s) => !!s.report);
   return (
     <div className="plan-wrap" id="planWrap" ref={wrap}>
       <svg id="plan" ref={svg} xmlns="http://www.w3.org/2000/svg" />
       <div className="tooltip" ref={tip} hidden />
       <MapControls />
       <TimeIsland />
-      {!routeOpen && <RoomPeek />}
-      {!routeOpen && <PlacePeek />}
-      {!routeOpen && (
+      {!routeOpen && !reporting && <RoomPeek />}
+      {!routeOpen && !reporting && <PlacePeek />}
+      {!routeOpen && !reporting && (
         <button className="route-fab" title="Построить маршрут" onClick={() => openRoute()}>
           <Icon name="route" /><span>Маршрут</span>
         </button>
       )}
       <PickBar />
+      <ReportPickBar />
       <RouteSheet />
     </div>
   );

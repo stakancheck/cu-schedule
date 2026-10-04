@@ -1,6 +1,7 @@
 /* Каркас: план слева, колонка справа; на телефоне вкладки и полноэкранные экраны */
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { getState, initialRoute, setState, useApp } from "./lib/store";
+import { cancelPick, closeReport } from "./lib/report";
 import {
   closeFreeScreen, closeGuide, closeRoomScreen, closeSearch, goStep, openRoute, openSearch, planCtl, routeBack, selectPlace, selectRoom, setDate,
   setFloor, setHighlight, setView, tick,
@@ -18,6 +19,7 @@ import { PlaceScreen } from "./components/Place";
 import { SearchLayer } from "./components/Search";
 import { RoutePanel } from "./components/Route";
 import { LegalNotice, TabBar, Toast, Useful } from "./components/Chrome";
+import { FeedbackIntro, ReportSheet } from "./components/Feedback";
 import { ConnectGuide, Profile } from "./components/Connect";
 
 const phoneMq = window.matchMedia(PHONE_MQ);
@@ -29,7 +31,8 @@ const usePhone = () => useSyncExternalStore(
 // Системная «Назад» в Telegram и Esc: закрываем то, что открыто поверх
 function back() {
   const s = getState();
-  if (s.search) closeSearch();
+  if (s.report) { if (s.report.picking) cancelPick(); else closeReport(); }
+  else if (s.search) closeSearch();
   else if (s.guide !== null) closeGuide();
   else if (s.route.open) routeBack();
   else if (s.roomScreen) closeRoomScreen();
@@ -56,9 +59,10 @@ function useKeys() {
         return;
       }
       if (getState().search) return;
-      if (t.tagName === "INPUT" || t.getAttribute("role") === "slider") { if (e.key === "Escape") t.blur(); return; }
+      if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.getAttribute("role") === "slider") { if (e.key === "Escape") t.blur(); return; }
       if (e.key === "/") { e.preventDefault(); openSearch(); return; }
       const s = getState();
+      if (s.report) { if (e.key === "Escape") back(); return; }
       // инструкция поверх всего: стрелки листают её слайды
       if (s.guide !== null) { if (e.key === "Escape") back(); return; }
       if (s.route.open) {
@@ -83,7 +87,7 @@ export function App() {
   const view = useApp((s) => s.view), mine = useApp((s) => s.mine);
   const room = useApp((s) => s.room), roomScreen = useApp((s) => s.roomScreen), freeScreen = useApp((s) => s.freeScreen);
   const place = useApp((s) => s.place), search = useApp((s) => s.search), highlight = useApp((s) => s.highlight);
-  const guide = useApp((s) => s.guide !== null);
+  const guide = useApp((s) => s.guide !== null), reporting = useApp((s) => !!s.report);
   const routeOpen = useApp((s) => s.route.open), step = useApp((s) => s.route.step), picking = useApp((s) => s.route.picking);
   const phone = usePhone();
   // компьютер: колонку открывают кнопкой; маршрут строится в ней, поэтому на время маршрута она видна
@@ -118,12 +122,15 @@ export function App() {
     // сразу показываем сохранённое, затем сверяемся с календарём
     if (account.user) account.sync();
     if (initialRoute) openRoute(initialRoute);
+    // ссылка из обращения (#mk=x,y): показать отмеченное место
+    const mk = getState().mark;
+    if (mk) requestAnimationFrame(() => requestAnimationFrame(() => planCtl.current?.focusBox({ x: mk.x - 80, y: mk.y - 80, width: 160, height: 160 })));
     return () => { clearInterval(id); off(); };
   }, []);
 
   useEffect(() => {
-    setTgBackButton(search || guide || !!room || !!place || !!highlight || (phone && view !== "plan") || routeOpen || roomScreen || freeMode);
-  }, [search, guide, room, place, highlight, phone, view, routeOpen, roomScreen, freeMode]);
+    setTgBackButton(reporting || search || guide || !!room || !!place || !!highlight || (phone && view !== "plan") || routeOpen || roomScreen || freeMode);
+  }, [reporting, search, guide, room, place, highlight, phone, view, routeOpen, roomScreen, freeMode]);
 
   // новая вкладка или экран открываются сверху
   useEffect(() => { if (body.current) body.current.scrollTop = 0; }, [view, roomMode, placeMode, place, routeOpen, freeMode]);
@@ -157,6 +164,8 @@ export function App() {
       <SearchLayer />
       <Toast />
       <LegalNotice />
+      <FeedbackIntro />
+      <ReportSheet />
       <TabBar />
     </div>
   );

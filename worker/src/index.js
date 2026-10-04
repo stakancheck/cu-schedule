@@ -5,12 +5,14 @@
 //   GET  /v1/me        -> { user }
 //   GET  /v1/events    ?from=YYYY-MM-DD&to=YYYY-MM-DD[&since=<ctag>] -> { ctag, events } | { unchanged }
 //   POST /v1/rsvp      { href, uid, recurrenceId, scope: "one"|"series", partstat } -> { ok }
+//   POST /v1/feedback  { kind, text, contact?, pin?, device?, consent, took } -> { ok, number, url } (без входа, issue в GitHub)
 
 import { CalDav, HttpError } from "./caldav.js";
 import { parse, serialize, expand, setPartstat, wallToUtc, DEFAULT_TZ, PARTSTATS } from "./ical.js";
 import { toAppEvent } from "./timetable.js";
 import { seal, unseal } from "./session.js";
 import { provider, providers } from "./providers.js";
+import { feedback } from "./feedback.js";
 
 const DAY = 86400000;
 const MAX_RANGE_DAYS = 200;
@@ -125,6 +127,7 @@ const routes = {
   "GET /v1/me": async (req, env) => json({ user: publicUser(await session(req, env)) }),
   "GET /v1/events": events,
   "POST /v1/rsvp": rsvp,
+  "POST /v1/feedback": (req, env) => feedback(req, env, json),
 };
 
 export default {

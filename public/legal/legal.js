@@ -5,7 +5,7 @@
     name: "Суханов Артём Алексеевич",            // ФИО оператора (физическое лицо) полностью
     email: "stakancheck@gmail.com",           // почта для обращений
     tg: "stakancheck",   // Telegram без @
-    version: "1.0",
+    version: "1.1",
     date: "4 октября 2026 г.",
     site: "https://stakancheck.github.io/cu-schedule/",
   };
