@@ -1,8 +1,8 @@
 /* Нижнее меню телефона, «Полезное», уведомление */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApp, type View } from "../lib/store";
 import { setView } from "../lib/actions";
-import { cx } from "../lib/util";
+import { cx, lsGet, lsSet } from "../lib/util";
 import { Icon, type IconName } from "./icons";
 
 const TABS: [View, string, IconName][] = [["plan", "План", "map"], ["list", "Расписание", "list"], ["profile", "Профиль", "cu"]];
@@ -51,9 +51,34 @@ export function Useful() {
         ))}
       </section>
       <footer className="credits">
+        <p className="unofficial">Неофициальный ресурс: не принадлежит Центральному университету и находится на стадии согласования с администрацией и командой платформы ЦУ.</p>
+        <nav className="legal-links" aria-label="Правовые документы">
+          {LEGAL_DOCS.map(([file, title]) => <a key={file} href={LEGAL + file + ".html"} target="_blank" rel="noopener">{title}</a>)}
+        </nav>
         Благодарность можно выразить: <a href="https://t.me/stakancheck" target="_blank" rel="noopener">@stakancheck</a>
       </footer>
     </>
+  );
+}
+
+const LEGAL = import.meta.env.BASE_URL + "legal/";
+const LEGAL_DOCS: [string, string][] = [
+  ["privacy", "Конфиденциальность"], ["terms", "Условия"], ["consent", "Согласие на данные"], ["storage", "Cookie и хранение"],
+];
+
+/* Один раз сообщаем, что сервис неофициальный и что хранится на устройстве; cookie нет, поэтому выбора не требуется */
+export function LegalNotice() {
+  const [open, setOpen] = useState(() => lsGet("cu.legal") !== "1");
+  const guiding = useApp((s) => s.guide !== null || s.search);
+  if (!open || guiding) return null;
+  return (
+    <div className="legal-note" role="region" aria-label="О сервисе">
+      <p>
+        <b>Неофициальный сервис.</b> Он не от Центрального университета и находится на согласовании с администрацией и командой платформы ЦУ.
+        Cookie и аналитики нет, настройки хранятся на вашем устройстве. <a href={LEGAL + "privacy.html"} target="_blank" rel="noopener">Подробнее</a>
+      </p>
+      <button className="primary-btn" onClick={() => { lsSet("cu.legal", "1"); setOpen(false); }}>Понятно</button>
+    </div>
   );
 }
 

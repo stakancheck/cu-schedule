@@ -17,7 +17,7 @@ import { RoomScreen } from "./components/Room";
 import { PlaceScreen } from "./components/Place";
 import { SearchLayer } from "./components/Search";
 import { RoutePanel } from "./components/Route";
-import { TabBar, Toast, Useful } from "./components/Chrome";
+import { LegalNotice, TabBar, Toast, Useful } from "./components/Chrome";
 import { ConnectGuide, Profile } from "./components/Connect";
 
 const phoneMq = window.matchMedia(PHONE_MQ);
@@ -156,6 +156,7 @@ export function App() {
       <ConnectGuide />
       <SearchLayer />
       <Toast />
+      <LegalNotice />
       <TabBar />
     </div>
   );

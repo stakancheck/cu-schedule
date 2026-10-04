@@ -737,6 +737,22 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .credits { margin-top: 6px; text-align: center; font-size: 12px; color: var(--ink-3); }
 .credits a { color: var(--accent-ink); font-weight: 500; text-decoration: none; }
 .credits a:hover { text-decoration: underline; }
+.credits .unofficial { margin: 0 0 8px; line-height: 1.4; }
+.legal-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; margin-bottom: 8px; }
+.legal-links a { color: var(--ink-2); font-weight: 400; text-decoration: underline; }
+.consent-check { display: flex !important; grid-template-columns: none; gap: 8px; align-items: flex-start; font-weight: 400 !important; line-height: 1.4; }
+.login-form .consent-check input { width: 18px; height: 18px; padding: 0; margin: 1px 0 0; flex: none; accent-color: var(--accent); }
+.consent-check span { min-width: 0; font-size: 12px; color: var(--ink-2); }
+.consent-check a { color: var(--accent-ink); }
+.legal-note {
+  position: fixed; z-index: 29; left: 16px; bottom: 16px; width: min(360px, calc(100% - 32px));
+  padding: 12px 14px; border-radius: var(--radius); background: var(--panel); color: var(--ink);
+  border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(0,0,0,.18); font-size: 12px; line-height: 1.45;
+  display: grid; gap: 10px;
+}
+.legal-note p { margin: 0; }
+.legal-note a { color: var(--accent-ink); }
+@media (max-width: 900px) { .legal-note { left: 50%; translate: -50% 0; bottom: calc(84px + var(--safe-bottom)); } }
 .empty { padding: 28px 8px; text-align: center; color: var(--ink-3); }
 
 /* ------------------------------------------------------------ Мои пары */

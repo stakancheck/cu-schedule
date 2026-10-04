@@ -4,9 +4,11 @@ import { account, useAccountVersion } from "../lib/account";
 import { getState, useApp, setState } from "../lib/store";
 import { closeGuide, openGuide, setView, toast } from "../lib/actions";
 import { haptic } from "../lib/telegram";
-import { cx, dayFmt, fmt, iso, todayIso } from "../lib/util";
+import { cx, dayFmt, fmt, iso, lsSet, todayIso } from "../lib/util";
 import { Icon, type IconName } from "./icons";
 
+const LEGAL = import.meta.env.BASE_URL + "legal/";
+const CONSENT_VERSION = "1.0";
 const APP_PASSWORDS = "https://id.yandex.ru/security/app-passwords";
 const HERO = import.meta.env.BASE_URL + "img/connect-hero.webp";
 // последний слайд инструкции - форма входа
@@ -68,6 +70,7 @@ function LoginForm({ onDone }: { onDone: () => void }) {
     setBusy(true); setErr(null);
     try {
       await account.loginWithPassword(String(data.get("login")).trim(), String(data.get("password")).replace(/\s+/g, ""));
+      lsSet("cu.consent", JSON.stringify({ v: CONSENT_VERSION, at: new Date().toISOString() }));
       haptic.ok();
       setState({ mine: true });
       toast("Календарь подключён");
@@ -87,6 +90,10 @@ function LoginForm({ onDone }: { onDone: () => void }) {
           <input ref={pass} name="password" type="password" autoComplete="current-password" placeholder="16 букв от Яндекса" required />
           {canPaste && <button type="button" className="paste-btn" onClick={paste}>Вставить</button>}
         </span>
+      </label>
+      <label className="consent-check">
+        <input name="consent" type="checkbox" required />
+        <span>Мне есть 18 лет, либо согласен законный представитель. Даю <a href={LEGAL + "consent.html"} target="_blank" rel="noopener">согласие на обработку персональных данных</a>, прочитал <a href={LEGAL + "privacy.html"} target="_blank" rel="noopener">политику</a> и <a href={LEGAL + "terms.html"} target="_blank" rel="noopener">условия</a>. Сервис неофициальный.</span>
       </label>
       {err && <div className="form-error">{err}</div>}
       <button type="submit" className="primary-btn" disabled={busy}>{busy ? "Проверяю…" : "Подключить"}</button>
